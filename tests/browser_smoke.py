@@ -12,6 +12,14 @@ with sync_playwright() as p:
     page.get_by_label('Emri dhe mbiemri').fill('Test Profesor')
     page.get_by_role('button',name='Hënë, ora 1: i disponueshëm',exact=True).click()
     assert page.get_by_role('button',name='Hënë, ora 1: i bllokuar',exact=True).get_attribute('aria-pressed')=='true'
+    page.get_by_label('Maksimumi i orëve në javë',exact=True).fill('4')
+    for day in ['Martë','Enjte','Premte']:
+        page.locator('#working-days').get_by_label(day,exact=True).uncheck()
+    page.get_by_label('Nga ora mësimore',exact=True).select_option('3')
+    page.get_by_label('Deri në orën mësimore',exact=True).select_option('4')
+    page.get_by_role('button',name='Zbato në kalendar',exact=True).click()
+    assert page.get_by_role('button',name='Martë, ora 3: i bllokuar',exact=True).is_visible()
+    assert page.get_by_role('button',name='Hënë, ora 3: i disponueshëm',exact=True).is_visible()
     page.get_by_role('button',name='Ruaj profesorin').click()
     assert page.locator('.teacher-card').count()==1
     page.get_by_role('button',name='▤ Klasat & lëndët').click()
@@ -30,9 +38,18 @@ with sync_playwright() as p:
     page.get_by_role('button',name='Gjenero orarin →').click()
     page.get_by_text('✓ Orar i verifikuar',exact=False).wait_for(timeout=20000)
     assert page.locator('.lesson-block').count()==4
+    assert page.evaluate('result.entries.every(e=>[0,2].includes(Math.floor(e.slot/6))&&[2,3].includes(e.slot%6))')
     page.get_by_role('button',name='Sipas profesorit',exact=True).click()
     assert page.locator('.lesson-block').count()==4
     page.get_by_role('button',name='↓ CSV',exact=True).is_enabled()
+    page.get_by_role('button',name='♙ Profesorët').click()
+    page.get_by_role('button',name='Disponueshmëria / Ndrysho').first.click()
+    assert page.get_by_label('Maksimumi i orëve në javë',exact=True).input_value()=='4'
+    page.get_by_label('Maksimumi i orëve në javë',exact=True).fill('3')
+    page.get_by_role('button',name='Ruaj profesorin').click()
+    page.get_by_role('button',name='▥ Orari javor').click()
+    page.get_by_role('button',name='Gjenero orarin →').click()
+    page.get_by_text('maksimumi javor është 3',exact=False).wait_for(timeout=20000)
     page.reload()
     assert page.evaluate('JSON.parse(localStorage.getItem("orari-v2")).lessons.length')==1
     page.get_by_role('button',name='↻ Provo me shembull',exact=True).click()

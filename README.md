@@ -21,7 +21,7 @@ Shih [arkitekturën](docs/ARCHITECTURE.md) për kufijtë, modelin dhe hapat viju
 
 ## Ndërfaqja V2
 
-- Profesorë: formular për emrin dhe kalendar me klikim për terminet e bllokuara.
+- Profesorë: formular për emrin, maksimum javor (p.sh. 20/22), ditë pune dhe interval orësh (p.sh. nga ora e tretë), plus kalendar me klikim për përjashtime. Kufijtë janë striktë.
 - Klasa dhe lëndë: lista të veçanta, ndryshim emrash dhe mbrojtje nga fshirja e elementeve që përdoren.
 - Ngarkesa: zgjedhje nga menyja, ndryshim/fshirje dhe përmbledhje e orëve për klasë.
 - Orari: pamje sipas klasës, profesorit ose sallës, printim dhe eksport CSV.

@@ -40,3 +40,22 @@ def test_api_and_ui():
     assert response.status_code==200 and response.json()['verified']
     data=school().model_dump();data['lessons'][0]['teacher']='missing'
     assert client.post('/api/generate',json=data).status_code==422
+
+def test_teacher_weekly_cap_is_strict_across_classes():
+    s=school(teachers=[{'name':'A','max_hours':3}],lessons=[{'classroom':'C','subject':'X','teacher':'A','hours':2},{'classroom':'D','subject':'Y','teacher':'A','hours':2}])
+    result=generate(s)
+    assert result['status']=='infeasible'
+    assert any('maksimumi javor është 3' in issue for issue in result['issues'])
+    assert any('maksimumi javor' in e for e in verify(s,[{'lesson':0,'slot':0},{'lesson':0,'slot':1},{'lesson':1,'slot':2},{'lesson':1,'slot':3}]))
+
+def test_exact_weekly_cap_and_allowed_days_hours():
+    s=school(days=5,periods=6,teachers=[{'name':'A','max_hours':4,'unavailable':[d*6+p for d in range(5) for p in range(6) if d not in [1,3] or p<2]}],lessons=[{'classroom':'C','subject':'X','teacher':'A','hours':4}])
+    result=generate(s)
+    assert result['verified'] and len(result['entries'])==4
+    assert all(e['slot']//6 in [1,3] and e['slot']%6>=2 for e in result['entries'])
+
+def test_invalid_and_zero_weekly_cap():
+    data=school().model_dump();data['teachers'][0]['max_hours']=-1
+    assert client.post('/api/generate',json=data).status_code==422
+    data['teachers'][0]['max_hours']=0
+    assert client.post('/api/generate',json=data).json()['status']=='infeasible'

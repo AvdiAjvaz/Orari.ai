@@ -8,6 +8,7 @@ from ortools.sat.python import cp_model
 class Teacher(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     unavailable: list[int] = Field(default_factory=list)
+    max_hours: int | None = Field(default=None, ge=0, le=84)
 
 class Lesson(BaseModel):
     classroom: str = Field(min_length=1, max_length=80)
@@ -55,6 +56,12 @@ def verify(school, entries):
             occupied.add(key)
     if any(counts[i] != lesson.hours for i, lesson in enumerate(school.lessons)):
         errors.append('Numri i orëve javore nuk përputhet.')
+    teacher_hours = Counter()
+    for i, count in counts.items():
+        teacher_hours[school.lessons[i].teacher] += count
+    for teacher in school.teachers:
+        if teacher.max_hours is not None and teacher_hours[teacher.name] > teacher.max_hours:
+            errors.append(f'{teacher.name}: tejkalohet maksimumi javor prej {teacher.max_hours} orësh.')
     return errors
 
 def generate(school):
@@ -67,7 +74,10 @@ def generate(school):
         for name, hours in demand.items():
             capacity = len(slots)
             if kind == 'teacher':
-                capacity -= len(set(next(t.unavailable for t in school.teachers if t.name == name)))
+                teacher = next(t for t in school.teachers if t.name == name)
+                capacity -= len(set(teacher.unavailable))
+                if teacher.max_hours is not None and hours > teacher.max_hours:
+                    issues.append(f'{name}: {hours} orë të caktuara, por maksimumi javor është {teacher.max_hours}. Zvogëlo ngarkesën ose ndrysho kufirin.')
             if hours > capacity: issues.append(f'{name}: {hours} orë të kërkuara, vetëm {capacity} termine të lira.')
     if issues: return {'status': 'infeasible', 'issues': issues, 'entries': []}
     model = cp_model.CpModel()
@@ -80,6 +90,10 @@ def generate(school):
         for value in {getattr(l, kind) for l in school.lessons} - {''}:
             indices = [i for i, l in enumerate(school.lessons) if getattr(l, kind) == value]
             for s in slots: model.add(sum(x[i, s] for i in indices) <= 1)
+    for teacher in school.teachers:
+        if teacher.max_hours is not None:
+            indices = [i for i, lesson in enumerate(school.lessons) if lesson.teacher == teacher.name]
+            model.add(sum(x[i, s] for i in indices for s in slots) <= teacher.max_hours)
     penalties = []
     # Prefer spreading each class/subject across days, even if taught by different teachers.
     for classroom, subject in {(l.classroom, l.subject) for l in school.lessons}:
