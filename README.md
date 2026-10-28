@@ -18,3 +18,19 @@ Hap aplikacionin përmes portit 8000 në mjedisin e zhvillimit. Ngarko shembulli
 ```
 
 Shih [arkitekturën](docs/ARCHITECTURE.md) për kufijtë, modelin dhe hapat vijues. Nuk kërkohen kredenciale ose shërbime të jashtme. Mos e ekspozo publikisht pa autentikim dhe kufizim të kërkesave.
+
+## Ndërfaqja V2
+
+- Profesorë: formular për emrin dhe kalendar me klikim për terminet e bllokuara.
+- Klasa dhe lëndë: lista të veçanta, ndryshim emrash dhe mbrojtje nga fshirja e elementeve që përdoren.
+- Ngarkesa: zgjedhje nga menyja, ndryshim/fshirje dhe përmbledhje e orëve për klasë.
+- Orari: pamje sipas klasës, profesorit ose sallës, printim dhe eksport CSV.
+- Të dhënat e versionit të parë barten automatikisht; ruhen vetëm në shfletuesin aktual.
+
+Kontrolli i ndërfaqes me shfletues (opsional për zhvillim, kërkon Chromium dhe `pip install playwright`):
+
+```sh
+python tests/browser_smoke.py
+```
+
+Nise serverin më parë. `ORARI_TEST_URL` mund të përcaktojë adresën e testimit. Testi përdor një sesion të izoluar shfletuesi.
