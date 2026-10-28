@@ -62,3 +62,14 @@ Kontrolli i formularëve të këtyre rregullave: `python tests/browser_rules.py`
 
 
 Te shembulli nga fotoja është aktivizuar preferenca **6 orë të premten për secilën klasë**. Ndryshohet ose hiqet te Përmbledhja → Java shkollore. Motori minimizon fillimisht devijimin nga ky synim dhe pastaj përsëritjet e lëndëve. Rregullat strikte kanë përparësi; nëse rezultati nuk e plotëson synimin, shfaqen orët reale të së premtes për secilën klasë.
+
+
+## Lëvizje manuale, swap dhe orë statike
+
+Pas gjenerimit, tërhiq një orë te një termin tjetër i së njëjtës klasë. Nëse termini është i zënë, dy orët ndërrohen. Për telefon/tastierë mund ta zgjedhësh orën me klikim/Enter dhe pastaj terminin e ri. Ndryshimi pranohet vetëm pasi serveri të kontrollojë të gjitha rregullat strikte; përndryshe orari mbetet i paprekur dhe shfaqen arsyet. **Kthe lëvizjen** kthen ndryshimin e fundit gjatë sesionit. Lëvizjet nuk i ndërrojnë klasën ose profesorin angazhimit.
+
+Te **Orari javor → Orë statike**, zgjidh angazhimin dhe kliko terminet që duhet të mbeten fikse. I njëjti dialog hapet me **Fikso** pranë angazhimit në Ngarkesën mësimore. Për shembull, për klasën **12/9**, zgjidh **Sociologji** dhe fikso **Premte / ora 6**. Ruaj dhe rigjenero. Orët shënohen me 🔒 dhe nuk zhvendosen derisa të hiqet fiksimi. Fiksimet numërohen brenda ngarkesës javore, jo si orë shtesë.
+
+Orari i verifikuar ruhet në këtë shfletues dhe rikontrollohet në server pas rifreskimit. Ndryshimet e të dhënave e bëjnë orarin e vjetër të papërdorshëm për eksport deri te gjenerimi i ri. Ndryshimi i preferencës së së premtes nga një lëvizje manuale shfaqet në përmbledhje, por nuk është ndalim strikt.
+
+Kontrolli në shfletues për këto veprime: `python tests/browser_manual.py` (me serverin të nisur; mund të caktohet `ORARI_TEST_URL`).

@@ -12,7 +12,7 @@ A separate verifier checks the returned entries against the input before any sol
 The browser retains input in localStorage; the server has no database or accounts. Input changes invalidate visible output. CSV exports use the exact solved input snapshot.
 
 ## Scope and next milestones
-This version supports one school/week, shared rooms, availability, class/teacher/room/whole-school views, configurable daily loads, hard subject caps, and required double periods. It does not yet support shifts, split groups, fixed placements, teacher-gap optimization, configurable priority tiers, manual dragging, or minimum-change rescheduling. Those require explicit schema, constraints and verifier updates together.
+This version supports one school/week, shared rooms, availability, class/teacher/room/whole-school views, configurable daily loads, hard subject caps, and required double periods. It does not yet support shifts, split groups, teacher-gap optimization, configurable priority tiers, or minimum-change rescheduling. Fixed placements and verified manual dragging/swaps are supported. Those require explicit schema, constraints and verifier updates together.
 
 Next: persist versioned school plans in PostgreSQL; add typed rule definitions and lexicographic priorities; add fixed assignments and contradiction explanations; move solve jobs to a bounded background queue with polling/cancellation; add accounts and authorization before public multi-user deployment. Current synchronous requests should run only in trusted local development. Limits bound individual models, not aggregate concurrent demand.
 
@@ -40,3 +40,12 @@ Capacity prechecks report incompatible weekly/daily bounds and subject caps. CP-
 
 
 The photo example sets `preferred_friday_hours=6` (browser state: `preferredFriday`). This is a soft per-class target on day index 4, editable in weekly settings. CP-SAT minimizes total absolute Friday deviation before subject repetition: the coefficient is total weekly demand + 1, exceeding the maximum possible repetition penalty. Hard constraints are never relaxed. Responses retain `penalty` as the repetition count and separately return `friday_deviation` and `friday_loads`; UI reports unmet targets without claiming infeasibility or optimality.
+
+
+## Fixed placements and manual editing
+
+`Lesson.fixed_slots` is a unique list of zero-based weekly slots, bounded by assignment hours and the School's week. These are part of existing weekly demand. CP-SAT forces their occupancy; prechecks explain resource collisions and unavailable teachers; the independent verifier requires every pin in the submitted entries, including manual validations and document exports. Pinning a late lesson does not relax the class prefix rule: earlier periods still require coverage. Week resizing preserves each pin's day/period coordinates and refuses changes that would discard pins. Editing assignment hours cannot reduce demand below the number of pins.
+
+The browser offers native drag/drop and keyboard/two-click movement. Moves and temporal swaps remain within the original classroom. Dropping into an occupied class slot swaps the two entries; assignments, teachers, subjects, rooms and weekly totals retain their identity. The candidate is posted to `POST /api/validate`; all hard rules are checked before replacing the visible result. Invalid candidates leave the existing result untouched and return concrete issues. Fixed source/target entries are protected in the UI and again by the API. A one-step undo uses the same validation path. Manual results never retain an optimality claim; soft Friday target metrics are recomputed.
+
+Validated result snapshots are stored in browser localStorage with their full input fingerprint. On reload, a result is restored only if the current inputs match and `/api/validate` approves it under current server rules. Concurrent edits invalidate pending movement responses using input revision and result identity checks. This remains per-browser storage, not multi-user/server persistence. Moving one period of a double block is allowed only when the resulting schedule still satisfies all required disjoint pairs.

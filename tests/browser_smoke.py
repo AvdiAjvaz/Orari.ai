@@ -84,7 +84,7 @@ with sync_playwright() as p:
     assert page.locator('.all-classes-table td strong').count()==22
     assert not page.locator('#view-select').is_visible()
     expected=page.evaluate("result.entries.map(e=>({slot:String(e.slot),classroom:snapshot.lessons[e.lesson].classroom,text:snapshot.lessons[e.lesson].teacher}))")
-    actual=page.locator('.all-classes-table td[data-slot]').evaluate_all("cells=>cells.map(c=>({slot:c.dataset.slot,classroom:c.dataset.classroom,text:c.querySelector('strong').textContent}))")
+    actual=page.locator('.all-classes-table td[data-lesson]').evaluate_all("cells=>cells.map(c=>({slot:c.dataset.slot,classroom:c.dataset.classroom,text:c.querySelector('strong').textContent}))")
     key=lambda e:(e['slot'],e['classroom'])
     assert sorted(actual,key=key)==sorted(expected,key=key)
     page.get_by_label('Përmbajtja e qelizës',exact=True).select_option('both')

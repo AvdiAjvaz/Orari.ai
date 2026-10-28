@@ -19,11 +19,14 @@ class Lesson(BaseModel):
     room: str = ''
     max_per_day: int | None = Field(default=None, ge=1, le=12)
     double_periods: int = Field(default=0, ge=0, le=20)
+    fixed_slots: list[int] = Field(default_factory=list, max_length=40)
 
     @model_validator(mode='after')
     def blocks_fit(self):
         if self.double_periods * 2 > self.hours:
             raise ValueError('Blloqet dyshe kërkojnë më shumë orë se ngarkesa javore.')
+        if len(set(self.fixed_slots)) != len(self.fixed_slots) or len(self.fixed_slots) > self.hours:
+            raise ValueError('Orët statike duhet të jenë unike dhe jo më shumë se orët javore.')
         return self
 
 class ClassRule(BaseModel):
@@ -55,6 +58,8 @@ class School(BaseModel):
             raise ValueError('Çdo angazhim duhet të ketë profesor të regjistruar.')
         if any(s < 0 or s >= self.days*self.periods for t in self.teachers for s in t.unavailable):
             raise ValueError('Termini i padisponueshëm është jashtë javës.')
+        if any(slot < 0 or slot >= self.days * self.periods for lesson in self.lessons for slot in lesson.fixed_slots):
+            raise ValueError('Ora statike është jashtë javës shkollore.')
         if sum(l.hours for l in self.lessons) > 1200:
             raise ValueError('Versioni fillestar përkrah deri në 1200 orë.')
         if len(set(self.classes)) != len(self.classes) or any(not c or len(c) > 80 for c in self.classes):
@@ -103,6 +108,11 @@ def verify(school, entries):
             key = (kind, value, slot)
             if key in occupied: errors.append(f'Përplasje: {value}.')
             occupied.add(key)
+    actual_entries = {(e['lesson'], e['slot']) for e in entries}
+    for i, lesson in enumerate(school.lessons):
+        for slot in lesson.fixed_slots:
+            if (i, slot) not in actual_entries:
+                errors.append(f'{lesson.classroom}, {lesson.subject}: ora statike në ditën {slot // school.periods + 1}, orën {slot % school.periods + 1} duhet të mbetet e fiksuar.')
     if any(counts[i] != lesson.hours for i, lesson in enumerate(school.lessons)):
         errors.append('Numri i orëve javore nuk përputhet.')
     for classroom in classrooms(school):
@@ -167,12 +177,25 @@ def generate(school):
             issues.append(f'{classroom}, {subject}: ngarkesa tejkalon kufirin {limit} orë/ditë për {school.days} ditë.')
         if limit == 1 and any(l.double_periods for l in matching):
             issues.append(f'{classroom}, {subject}: blloqet dyshe kërkojnë kufi ditor së paku 2.')
+    fixed_resources = set()
+    for lesson in school.lessons:
+        for slot in lesson.fixed_slots:
+            if slot in next(t.unavailable for t in school.teachers if t.name == lesson.teacher):
+                issues.append(f'{lesson.classroom}, {lesson.subject}: ora statike bie në një termin kur {lesson.teacher} nuk është i disponueshëm.')
+            for kind, value in [('klasa', lesson.classroom), ('profesori', lesson.teacher), ('salla', lesson.room)]:
+                if not value:
+                    continue
+                key = (kind, value, slot)
+                if key in fixed_resources:
+                    issues.append(f'Orët statike përplasen: {kind} {value}, dita {slot // school.periods + 1}, ora {slot % school.periods + 1}.')
+                fixed_resources.add(key)
     if issues: return {'status': 'infeasible', 'issues': issues, 'entries': []}
     model = cp_model.CpModel()
     x = {(i, s): model.new_bool_var(f'x_{i}_{s}') for i in range(len(school.lessons)) for s in slots}
     unavailable = {t.name: set(t.unavailable) for t in school.teachers}
     for i, lesson in enumerate(school.lessons):
         model.add(sum(x[i, s] for s in slots) == lesson.hours)
+        for slot in lesson.fixed_slots: model.add(x[i, slot] == 1)
         for s in unavailable[lesson.teacher]: model.add(x[i, s] == 0)
     for i, lesson in enumerate(school.lessons):
         if not lesson.double_periods:
@@ -281,6 +304,19 @@ def example_photo():
     if errors:
         raise RuntimeError('Photo transcription must pass verification: ' + str(errors))
     return {**example, 'verified': True}
+
+@app.post('/api/validate')
+def validate_schedule(request: ExportRequest):
+    entries = [e.model_dump() for e in request.entries]
+    errors = verify(request.school, entries)
+    if errors:
+        return {'verified': False, 'issues': list(dict.fromkeys(errors)), 'entries': []}
+    school = request.school
+    counts = Counter((school.lessons[e['lesson']].classroom, school.lessons[e['lesson']].subject, e['slot'] // school.periods) for e in entries)
+    loads = {c: sum(school.lessons[e['lesson']].classroom == c and e['slot'] // school.periods == 4 for e in entries) for c in sorted(classrooms(school))} if school.preferred_friday_hours is not None else {}
+    return {'verified': True, 'issues': [], 'entries': entries, 'status': 'manual',
+            'penalty': sum(max(0, count - 1) for count in counts.values()),
+            'friday_loads': loads, 'friday_deviation': sum(abs(n - school.preferred_friday_hours) for n in loads.values())}
 
 @app.post('/api/export/{format}')
 def export_schedule(format: Literal['xlsx', 'docx', 'pdf'], request: ExportRequest):
