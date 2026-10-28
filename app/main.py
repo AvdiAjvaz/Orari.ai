@@ -1,6 +1,7 @@
 from collections import Counter
+from typing import Literal
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 from ortools.sat.python import cp_model
@@ -123,5 +124,50 @@ def schedule(school: School):
 @app.get('/api/health')
 def health():
     return {'status': 'ok'}
+
+class ScheduleEntry(BaseModel):
+    lesson: int = Field(ge=0)
+    slot: int = Field(ge=0)
+
+class ExportRequest(BaseModel):
+    school: School
+    entries: list[ScheduleEntry] = Field(min_length=1, max_length=1200)
+    classes: list[str] = Field(default_factory=list, max_length=250)
+    school_name: str = Field(default='', max_length=200)
+    title: str = Field(default='', max_length=200)
+    mode: Literal['all', 'classroom', 'teacher', 'room'] = 'all'
+    content: Literal['teacher', 'subject', 'both'] = 'teacher'
+    value: str = Field(default='', max_length=80)
+
+    @model_validator(mode='after')
+    def class_names(self):
+        if any(not name or len(name) > 80 for name in self.classes):
+            raise ValueError('Emër klase i pavlefshëm.')
+        return self
+
+@app.get('/api/examples/photo')
+def example_photo():
+    from app.examples import photo_example
+    example = photo_example()
+    source = example['state']
+    school = School(**{**source, 'teachers': [Teacher(name=t['name']) for t in source['teachers']]})
+    errors = verify(school, example['entries'])
+    if errors:
+        raise RuntimeError('Photo transcription must pass verification: ' + str(errors))
+    return {**example, 'verified': True}
+
+@app.post('/api/export/{format}')
+def export_schedule(format: Literal['xlsx', 'docx', 'pdf'], request: ExportRequest):
+    from app.exports import document_bytes
+    errors = verify(request.school, [e.model_dump() for e in request.entries])
+    if errors:
+        raise HTTPException(status_code=422, detail='Orari nuk është i vlefshëm: ' + ' '.join(errors))
+    try:
+        content = document_bytes(request, format)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    mime = {'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'pdf': 'application/pdf'}
+    return Response(content, media_type=mime[format], headers={'Content-Disposition': f'attachment; filename="orari-javor.{format}"'})
 
 app.mount('/', StaticFiles(directory=Path(__file__).parent / 'static', html=True), name='web')

@@ -35,3 +35,11 @@ python tests/browser_smoke.py
 ```
 
 Nise serverin më parë. `ORARI_TEST_URL` mund të përcaktojë adresën e testimit. Testi përdor një sesion të izoluar shfletuesi.
+
+## Shembulli nga fotoja dhe eksportet
+
+Butoni **Shembulli nga fotoja** ngarkon 6 klasat (10/8, 11/9, 12/9, 10/7, 11/8, 12/8), 5 ditë, 7 orë/ditë dhe 199 orët e transkriptuara. Fillimisht shfaqet orari burimor i kontrolluar; pas ndryshimit të një profesori ose angazhimi, shtyp **Gjenero orarin**. Gjenerimi ruan numrin e orëve për çdo angazhim, por mund t'i zhvendosë të gjitha orët; nuk bëhet ende optimizim për ndryshime minimale.
+
+Fotoja nuk tregon lëndët për shumicën e profesorëve, ndaj përdoret **Lëndë e papërcaktuar**. Për **Sociologji** nuk shfaqet profesori: vendmbajtësit **Pa caktuar · klasa** duhen zëvendësuar me emrin real. Disponueshmëria dhe kufijtë javorë nuk inferohen nga fotoja. Shembulli i vogël mbetet i disponueshëm. Të dy butonat kërkojnë konfirmim para zëvendësimit të të dhënave aktuale.
+
+Butonat **Excel**, **Word** dhe **PDF** shkarkojnë skedarë të vërtetë `.xlsx`, `.docx` dhe `.pdf`, sipas pamjes aktuale (të gjitha klasat ose klasa/profesori/salla e zgjedhur). Eksporti e kontrollon përsëri orarin në server dhe refuzon rezultate të pavlefshme. PDF përfshin fontet shqip; Excel ka nga një fletë për ditë në pamjen e përbashkët. CSV dhe printimi ekzistues mbeten.

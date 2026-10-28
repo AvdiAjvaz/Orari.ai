@@ -34,7 +34,7 @@ function persist() {
 }
 function changed(message) {
   revision++; result = null; snapshot = null;
-  $('schedule').replaceChildren(); $('schedule-empty').hidden = false; $('csv').disabled = true; $('print').disabled = true;
+  $('schedule').replaceChildren(); $('schedule-empty').hidden = false; $('csv').disabled = true; $('print').disabled = true;setExports(false);
   $('solve-status').replaceChildren(); $('view-select').replaceChildren();
   persist(); refresh(); if(message) tell(message);
 }
@@ -45,6 +45,7 @@ function selectOptions(id, values, placeholder) {
   if(values.includes(previous)) select.value = previous;
 }
 function refresh() {
+  $('source-note').hidden=!state.sourceNote;$('source-note').textContent=state.sourceNote||'';
   $('nav-teachers').textContent = state.teachers.length; $('nav-lessons').textContent = state.lessons.length;
   $('days').value = state.days; $('periods').value = state.periods;
   $('week-capacity').textContent = `${state.days * state.periods} termine në javë për çdo klasë.`;
@@ -180,12 +181,12 @@ $('week-form').onsubmit=e=>{
   const apply=()=>{state.days=days;state.periods=periods;state.teachers.forEach(t=>t.blocked=t.blocked.filter(k=>{const[d,p]=k.split(':').map(Number);return d<days&&p<periods;}));changed('Java shkollore u përditësua. Gjenero përsëri orarin me këto termine.');};
   if(discarded)ask('Të ndryshohet java?',`${discarded} bllokime të disponueshmërisë bien jashtë javës së re dhe do të hiqen.`,apply);else apply();
 };
-function payload(){return {days:state.days,periods:state.periods,teachers:state.teachers.map(t=>({name:t.name,max_hours:t.maxHours??null,unavailable:t.blocked.map(k=>{const[d,p]=k.split(':').map(Number);return d*state.periods+p;})})),lessons:structuredClone(state.lessons),time_limit:10};}
+function payload(){return {schoolName:state.schoolName||'',scheduleTitle:state.scheduleTitle||'',days:state.days,periods:state.periods,teachers:state.teachers.map(t=>({name:t.name,max_hours:t.maxHours??null,unavailable:t.blocked.map(k=>{const[d,p]=k.split(':').map(Number);return d*state.periods+p;})})),lessons:structuredClone(state.lessons),time_limit:10};}
 function solveStatus(message,kind=''){const box=el('div',message,'status-box'+(kind?' '+kind:''));$('solve-status').replaceChildren(box);}
 $('generate').onclick=async()=>{
   if(busy||!state.lessons.length)return;busy=true;const requestRevision=revision,request=payload(),requestClasses=[...state.classes];
   $('generate').disabled=true;$('generate').textContent='Duke gjeneruar…';document.body.classList.add('busy');
-  result=null;snapshot=null;$('schedule').replaceChildren();$('schedule-empty').hidden=true;$('csv').disabled=true;$('print').disabled=true;
+  result=null;snapshot=null;$('schedule').replaceChildren();$('schedule-empty').hidden=true;$('csv').disabled=true;$('print').disabled=true;setExports(false);
   solveStatus('Duke kërkuar një orar pa përplasje…\nPo kontrollohen disponueshmëria dhe shpërndarja e lëndëve.','pending');
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),45000);
   try{
@@ -195,7 +196,7 @@ $('generate').onclick=async()=>{
     if(revision!==requestRevision){solveStatus('Të dhënat ndryshuan gjatë gjenerimit. Gjenero përsëri me ndryshimet e reja.','error');return;}
     if(!data.verified){solveStatus((data.status==='infeasible'?'Nuk ekziston orar me këto kufizime.':'Nuk u gjet zgjidhje brenda kohës së caktuar.')+'\n'+(data.issues||[]).join('\n'),'error');$('schedule-empty').hidden=false;return;}
     result=data;snapshot={...request,classes:requestClasses};solveStatus(`✓ Orar i verifikuar · ${data.entries.length} orë mësimi\n${data.status==='optimal'?'Shpërndarja më e mirë u provua.':'U gjet zgjidhje e vlefshme; optimaliteti nuk u provua.'} Përsëritje lënde brenda ditës: ${data.penalty}.`);
-    $('csv').disabled=false;$('print').disabled=false;updateViews();refresh();
+    $('csv').disabled=false;$('print').disabled=false;setExports(true);updateViews();refresh();
   }catch(error){solveStatus(error.name==='AbortError'?'Kërkesa zgjati shumë. Shërbimi mund të jetë duke u zgjuar; provo përsëri.':error.message,'error');$('schedule-empty').hidden=false;}
   finally{clearTimeout(timeout);busy=false;document.body.classList.remove('busy');$('generate').textContent='Gjenero orarin →';$('generate').disabled=!state.lessons.length;}
 };
@@ -230,8 +231,10 @@ function renderSchedule(){
 }
 function renderAllClasses(){
   const root=el('div',undefined,'all-classes-view');
-  root.append(el('h2','Orari javor · Të gjitha klasat','all-classes-title'));
+  if(snapshot.schoolName)root.append(el('h2',snapshot.schoolName,'all-classes-title'));
+  root.append(el('h2',snapshot.scheduleTitle||'Orari javor · Të gjitha klasat','all-classes-title'));
   const classes=snapshot.classes||[...new Set(snapshot.lessons.map(l=>l.classroom))];
+  root.style.setProperty('--class-columns',classes.length);
   const content=$('all-content').value;
   // Index the verified result once; changing views never regenerates the timetable.
   const entries=new Map(result.entries.map(e=>[`${e.slot}:${snapshot.lessons[e.lesson].classroom}`,snapshot.lessons[e.lesson]]));
@@ -248,7 +251,7 @@ function renderAllClasses(){
       for(const classroom of classes){
         const cell=row.insertCell(),lesson=entries.get(`${day*snapshot.periods+period}:${classroom}`);
         if(!lesson){cell.append(el('span','—','all-free'));continue;}
-        const main=content==='subject'?lesson.subject:lesson.teacher;
+        const main=content==='subject'?lesson.subject:lesson.teacher.startsWith('Pa caktuar · ')?lesson.subject:lesson.teacher;
         cell.append(el('strong',main));
         if(content==='both')cell.append(el('small',lesson.subject));
         cell.title=`${classroom} · ${lesson.subject} · ${lesson.teacher}${lesson.room?' · '+lesson.room:''}`;
@@ -267,6 +270,35 @@ $('csv').onclick=()=>{
   download('orari-javor.csv','\ufeff'+rows.map(row=>row.map(quote).join(',')).join('\r\n'),'text/csv;charset=utf-8');
 };
 $('print').onclick=()=>window.print();
+function setExports(enabled){for(const format of ['xlsx','docx','pdf'])$(format).disabled=!enabled;}
+for(const format of ['xlsx','docx','pdf'])$(format).onclick=async()=>{
+  if(!result||!snapshot)return;
+  const button=$(format);button.disabled=true;
+  const data={school:snapshot,entries:result.entries,classes:snapshot.classes||[],school_name:snapshot.schoolName||'',title:snapshot.scheduleTitle||'',mode,content:$('all-content').value,value:$('view-select').value};
+  try{
+    const response=await fetch('/api/export/'+format,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    if(!response.ok){const error=await response.json();throw Error(typeof error.detail==='string'?error.detail:'Eksporti dështoi. Kontrollo orarin dhe provo përsëri.');}
+    download('orari-javor.'+format,await response.blob(),response.headers.get('content-type'));
+    tell('Dokumenti '+format.toUpperCase()+' u shkarkua për pamjen e zgjedhur.');
+  }catch(error){tell(error.message,true);}finally{button.disabled=!result;}
+};
+async function loadPhotoExample(){
+  const button=$('photo-example');button.disabled=true;
+  try{
+    const response=await fetch('/api/examples/photo');if(!response.ok)throw Error('Shembulli nuk u ngarkua. Provo përsëri.');
+    const data=await response.json();state={...data.state,sourceNote:data.note};
+    resetLesson();resetCatalogForm('class');resetCatalogForm('subject');changed(data.note);
+    snapshot={...payload(),classes:[...state.classes]};result={entries:data.entries,verified:data.verified,status:'reference'};
+    mode='all';document.querySelectorAll('[data-mode]').forEach(n=>{n.classList.toggle('selected',n.dataset.mode==='all');n.setAttribute('aria-pressed',String(n.dataset.mode==='all'));});
+    $('csv').disabled=false;$('print').disabled=false;setExports(true);updateViews();refresh();navigate('schedule');
+    solveStatus('✓ Transkriptimi nga fotoja u kontrollua: '+data.entries.length+' orë, pa përplasje.\nKy është orari burimor. Ndrysho kërkesat te Profesorët ose Ngarkesa mësimore dhe shtyp “Gjenero orarin” për një zgjidhje të re.');
+  }catch(error){tell(error.message,true);}finally{button.disabled=false;}
+}
+$('photo-example').onclick=()=>{
+  if(state.teachers.length||state.classes.length||state.subjects.length||state.lessons.length)ask('Të ngarkohet shembulli nga fotoja?','Të dhënat aktuale do të zëvendësohen me 6 klasat dhe ngarkesën nga fotoja. Ndryshimet aktuale në këtë pajisje do të humbasin.',loadPhotoExample);
+  else loadPhotoExample();
+};
+
 function loadExample(){
   state={days:5,periods:6,teachers:[{name:'Arta Krasniqi',blocked:['0:0','0:1']},{name:'Blerim Hoxha',blocked:[]},{name:'Drita Gashi',blocked:['4:5']}],classes:['VI-1','VI-2'],subjects:['Matematikë','Gjuhë shqipe','Biologji'],lessons:[]};
   for(const classroom of state.classes)for(const[subject,teacher,hours,room]of[['Matematikë','Arta Krasniqi',4,''],['Gjuhë shqipe','Blerim Hoxha',5,''],['Biologji','Drita Gashi',2,'Laboratori']])state.lessons.push({classroom,subject,teacher,hours,room});

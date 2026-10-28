@@ -1,0 +1,52 @@
+{
+ "school_name":"SHML “Medreseja Alauddin” – PNF Gjilan",
+ "title":"Orari i përkohshëm mësimor 2026/2027",
+ "classes":["10/8","11/9","12/9","10/7","11/8","12/8"],
+ "days":[
+  [
+   ["Meritë","Sevdije","Muhamed","Bali","Shefqet","Nazim"],
+   ["Nazim","Meritë","Bali","Shefqet","Sevdije","Muhamed"],
+   ["Mustaf","Nazim","Shefqet","Muhamed","Bali","Sevdije"],
+   ["Muhamed","Mustaf","Meritë","Sevdije","Nazim","Bali"],
+   ["Shefqet","Muhamed","Nazim","Mustaf","Bali","Meritë"],
+   ["Sevdije","Bali","Mustaf","Elvira","Isuf","Shefqet"],
+   ["Elvira","Shefqet","Sevdije","Isuf","Muhamed","Mustaf"]
+  ],
+  [
+   ["Agnesa","Meritë","Muhamed","Elvira","Sevdije","Lulzim H"],
+   ["Elvira","Sevdije","Lulzim H","Agnesa","Meritë","Muhamed"],
+   ["Lulzim H","Meritë","Mustaf","Shefqet","Muhamed","Nazim"],
+   ["Meritë","Muhamed","Shefqet","Nazim","Bali","Mustaf"],
+   ["Mustaf","Bali","Muhamed","Lulzim H","Nazim","Shefqet"],
+   ["Nazim","Teutë","Avdi","Shefqet","Bali","Muhamed"],
+   ["Shefqet","Lulzim H","Nazim","Mustaf","Teutë","Bali"]
+  ],
+  [
+   ["Meriton","Nazim","Lulzim H","Meritë","Bali","Muhamed"],
+   ["Lulzim H","Bali","Muhamed","Meriton","Nazim","Meritë"],
+   ["Mustaf","Shefqet","Meritë","Muhamed","Bali","Nazim"],
+   ["Muhamed","Meriton","Mustaf","Bali","Shefqet","Lulzim H"],
+   ["Meritë","Mustaf","Shefqet","Meriton","Valmira","Nazim"],
+   ["Shefqet","Valmira","Nazim","Avdi","Meriton","Mustaf"],
+   ["Avdi",null,"Sociologji","Isuf","Bali","Sociologji"]
+  ],
+  [
+   ["Njomza","Teutë","Muhamed","Sevdije","Bali","Selim"],
+   ["Sevdije","Bali","Selim","Njomza","Teutë","Muhamed"],
+   ["Meriton","Mustaf","Avdi","Bali","Meritë","Sevdije"],
+   ["Meritë","Meriton","Mustaf","Njomza","Bali","Avdi"],
+   ["Njomza","Zeqirja","Sevdije","Meritë","Meriton","Mustaf"],
+   ["Zeqirja","Mustaf","Bali","Avdi","Sevdije","Sociologji"],
+   [null,"Sevdije",null,null,"Nazim",null]
+  ],
+  [
+   ["Agnesa","Sevdije","Meritë","Nazim","Shefqet","Lulzim H"],
+   ["Meritë","Shefqet","Sevdije","Agnesa","Nazim","Lulzim M"],
+   ["Avdi","Meritë","Selim","Shefqet","Lulzim H","Nazim"],
+   ["Meritë","Lulzim H","Avdi","Sevdije","Shefqet","Selim"],
+   ["Avdi","Meritë","Muhamed","Lulzim M","Valmira","Sevdije"],
+   ["Sevdije","Valmira","Sociologji","Avdi","Lulzim H","Shefqet"],
+   [null,null,null,null,null,null]
+  ]
+ ]
+}

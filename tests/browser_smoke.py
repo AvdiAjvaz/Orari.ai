@@ -52,10 +52,10 @@ with sync_playwright() as p:
     page.get_by_text('maksimumi javor është 3',exact=False).wait_for(timeout=20000)
     page.reload()
     assert page.evaluate('JSON.parse(localStorage.getItem("orari-v2")).lessons.length')==1
-    page.get_by_role('button',name='↻ Provo me shembull',exact=True).click()
+    page.get_by_role('button',name='↻ Shembull i vogël',exact=True).click()
     page.get_by_role('button',name='Anulo',exact=True).click()
     assert page.evaluate('JSON.parse(localStorage.getItem("orari-v2")).teachers[0].name')=='Test Profesor'
-    page.get_by_role('button',name='↻ Provo me shembull',exact=True).click()
+    page.get_by_role('button',name='↻ Shembull i vogël',exact=True).click()
     page.get_by_role('button',name='Vazhdo',exact=True).click()
     page.get_by_role('button',name='Gjenero orarin →').click()
     page.get_by_text('✓ Orar i verifikuar',exact=False).wait_for(timeout=20000)
@@ -113,6 +113,41 @@ with sync_playwright() as p:
     saved=page.evaluate('JSON.parse(localStorage.getItem("orari-v2"))')
     assert saved['teachers'][0]['blocked']==['0:0','4:5']
     assert saved['classes']==['C'] and len(saved['lessons'])==1
+    # Load the photographed school and download all three native formats.
+    page.set_viewport_size({'width':1440,'height':1100})
+    page.get_by_role('button',name='▥ Shembulli nga fotoja',exact=True).click()
+    page.get_by_role('button',name='Vazhdo',exact=True).click()
+    page.get_by_text('Transkriptimi nga fotoja u kontrollua',exact=False).wait_for(timeout=20000)
+    assert page.locator('.all-classes-table td strong').count()==199
+    assert page.locator('.all-classes-table thead th').count()==35
+    assert page.locator('.all-classes-table').first.evaluate('(e)=>e.getBoundingClientRect().width') < 1200
+    assert page.locator('.all-classes-table').first.locator('thead th').last.evaluate('(e)=>e.getBoundingClientRect().right') <= page.locator('#schedule').evaluate('(e)=>e.getBoundingClientRect().right')+1
+    assert page.locator('.all-classes-table').first.locator('tbody tr').first.locator('td').first.inner_text()=='Meritë'
+    assert page.locator('.all-classes-table').first.locator('tbody tr').first.locator('td').last.inner_text()=='Nazim'
+    for format,label in [('xlsx','Excel'),('docx','Word'),('pdf','PDF')]:
+        with page.expect_download() as download_event:
+            page.get_by_role('button',name=label,exact=True).click()
+        downloaded=download_event.value
+        assert downloaded.suggested_filename=='orari-javor.'+format
+        downloaded.save_as('/tmp/orari-photo.'+format)
+    page.screenshot(path='/tmp/orari-photo-example.png',full_page=True)
+    # Change a real teacher's requirements and regenerate the same 199-hour demand.
+    page.get_by_role('button',name='♙ Profesorët').click()
+    page.get_by_role('searchbox',name='Kërko profesorin').fill('Agnesa')
+    page.get_by_role('button',name='Disponueshmëria / Ndrysho').click()
+    page.get_by_label('Maksimumi i orëve në javë',exact=True).fill('4')
+    for day in ['Hënë','Mërkurë','Enjte']:
+        page.locator('#working-days').get_by_label(day,exact=True).uncheck()
+    page.get_by_label('Nga ora mësimore',exact=True).select_option('3')
+    page.get_by_role('button',name='Zbato në kalendar',exact=True).click()
+    page.get_by_role('button',name='Ruaj profesorin').click()
+    assert page.locator('#xlsx').is_disabled()
+    page.get_by_role('button',name='▥ Orari javor').click()
+    page.get_by_role('button',name='Gjenero orarin →').click()
+    page.get_by_text('✓ Orar i verifikuar',exact=False).wait_for(timeout=30000)
+    assert page.locator('.all-classes-table td strong').count()==199
+    assert page.evaluate("result.entries.filter(e=>snapshot.lessons[e.lesson].teacher==='Agnesa').length") == 4
+    assert page.evaluate("result.entries.filter(e=>snapshot.lessons[e.lesson].teacher==='Agnesa').every(e=>[1,4].includes(Math.floor(e.slot/7))&&e.slot%7>=2)")
     assert not errors, errors
     print('PASS: teacher/calendar CRUD, class/subject forms, assignment, generation, views, persistence, replace confirmation, mobile layout, v1 migration; no browser errors')
     browser.close()
