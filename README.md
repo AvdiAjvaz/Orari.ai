@@ -43,3 +43,8 @@ Butoni **Shembulli nga fotoja** ngarkon 6 klasat (10/8, 11/9, 12/9, 10/7, 11/8, 
 Fotoja nuk tregon lëndët për shumicën e profesorëve, ndaj përdoret **Lëndë e papërcaktuar**. Për **Sociologji** nuk shfaqet profesori: vendmbajtësit **Pa caktuar · klasa** duhen zëvendësuar me emrin real. Disponueshmëria dhe kufijtë javorë nuk inferohen nga fotoja. Shembulli i vogël mbetet i disponueshëm. Të dy butonat kërkojnë konfirmim para zëvendësimit të të dhënave aktuale.
 
 Butonat **Excel**, **Word** dhe **PDF** shkarkojnë skedarë të vërtetë `.xlsx`, `.docx` dhe `.pdf`, sipas pamjes aktuale (të gjitha klasat ose klasa/profesori/salla e zgjedhur). Eksporti e kontrollon përsëri orarin në server dhe refuzon rezultate të pavlefshme. PDF përfshin fontet shqip; Excel ka nga një fletë për ditë në pamjen e përbashkët. CSV dhe printimi ekzistues mbeten.
+
+
+## Fillimi në orën e parë dhe pa orë të zbrazëta
+
+Çdo klasë që ka mësim në një ditë nis detyrimisht në orën e parë dhe vazhdon pa boshllëqe deri në orën e fundit të planifikuar. Orët pas përfundimit të mësimit mbeten të lira; një ditë mund të mbetet pa mësim nëse ngarkesa nuk kërkon ndryshe. Ky është kusht strikt i solver-it, verifikuesit dhe eksporteve. Një profesor mund të fillojë nga ora e tretë, por dy orët e para të klasës duhet të mbulohen nga profesorë të tjerë. Nuk ndryshohen pushimet e zakonshme mes orëve: ndalohen vetëm terminet mësimore të zbrazëta.

@@ -64,3 +64,10 @@ def test_single_view_exports_and_excel_formula_safety():
     assert book.active['B6'].value.startswith('Lëndë e papërcaktuar\nMeritë')
     data['value']='nonexistent'
     assert client.post('/api/export/docx',json=data).status_code==422
+
+
+def test_exports_reject_late_starts_and_gaps():
+    for slots in ([1,2],[0,2]):
+        data=dict(school=dict(days=1,periods=3,teachers=[{'name':'A'}],lessons=[dict(classroom='C',subject='X',teacher='A',hours=2)]),entries=[dict(lesson=0,slot=s) for s in slots])
+        response=client.post('/api/export/pdf',json=data)
+        assert response.status_code==422 and 'pa orë të zbrazëta' in response.json()['detail']

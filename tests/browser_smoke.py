@@ -36,9 +36,26 @@ with sync_playwright() as p:
     assert page.locator('#lesson-list tr').count()==1
     page.get_by_role('button',name='▥ Orari javor').click()
     page.get_by_role('button',name='Gjenero orarin →').click()
+    # A late-only teacher cannot leave the class waiting for its first two periods.
+    page.get_by_text('Nuk ekziston orar me këto kufizime.',exact=False).wait_for(timeout=20000)
+    page.get_by_role('button',name='♙ Profesorët').click()
+    page.get_by_role('button',name='+ Shto profesor').click()
+    page.get_by_label('Emri dhe mbiemri').fill('Profesor i mëngjesit')
+    page.get_by_role('button',name='Ruaj profesorin').click()
+    page.get_by_role('button',name='▤ Klasat & lëndët').click()
+    page.get_by_label('Emri i lëndës',exact=True).fill('Gjuhë')
+    page.get_by_role('button',name='Shto lëndë',exact=True).click()
+    page.get_by_role('button',name='≡ Ngarkesa mësimore').click()
+    page.get_by_label('Klasa',exact=True).select_option('VI-1')
+    page.get_by_label('Lënda',exact=True).select_option('Gjuhë')
+    page.get_by_label('Profesori',exact=True).select_option('Profesor i mëngjesit')
+    page.get_by_label('Orë / javë',exact=True).fill('4')
+    page.get_by_role('button',name='+ Shto angazhimin').click()
+    page.get_by_role('button',name='▥ Orari javor').click()
+    page.get_by_role('button',name='Gjenero orarin →').click()
     page.get_by_text('✓ Orar i verifikuar',exact=False).wait_for(timeout=20000)
-    assert page.locator('.lesson-block').count()==4
-    assert page.evaluate('result.entries.every(e=>[0,2].includes(Math.floor(e.slot/6))&&[2,3].includes(e.slot%6))')
+    assert page.locator('.lesson-block').count()==8
+    assert page.evaluate("result.entries.filter(e=>snapshot.lessons[e.lesson].teacher==='Test Profesor').every(e=>[0,2].includes(Math.floor(e.slot/6))&&[2,3].includes(e.slot%6))")
     page.get_by_role('button',name='Sipas profesorit',exact=True).click()
     assert page.locator('.lesson-block').count()==4
     page.get_by_role('button',name='↓ CSV',exact=True).is_enabled()
@@ -51,7 +68,7 @@ with sync_playwright() as p:
     page.get_by_role('button',name='Gjenero orarin →').click()
     page.get_by_text('maksimumi javor është 3',exact=False).wait_for(timeout=20000)
     page.reload()
-    assert page.evaluate('JSON.parse(localStorage.getItem("orari-v2")).lessons.length')==1
+    assert page.evaluate('JSON.parse(localStorage.getItem("orari-v2")).lessons.length')==2
     page.get_by_role('button',name='↻ Shembull i vogël',exact=True).click()
     page.get_by_role('button',name='Anulo',exact=True).click()
     assert page.evaluate('JSON.parse(localStorage.getItem("orari-v2")).teachers[0].name')=='Test Profesor'

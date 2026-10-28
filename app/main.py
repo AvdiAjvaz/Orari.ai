@@ -57,6 +57,11 @@ def verify(school, entries):
             occupied.add(key)
     if any(counts[i] != lesson.hours for i, lesson in enumerate(school.lessons)):
         errors.append('Numri i orëve javore nuk përputhet.')
+    for classroom in {lesson.classroom for lesson in school.lessons}:
+        for day in range(school.days):
+            periods = [p for p in range(school.periods) if ('class', classroom, day * school.periods + p) in occupied]
+            if periods and periods != list(range(periods[-1] + 1)):
+                errors.append(f'{classroom}, dita {day + 1}: mësimi duhet të nisë në orën e parë dhe të vazhdojë pa orë të zbrazëta.')
     teacher_hours = Counter()
     for i, count in counts.items():
         teacher_hours[school.lessons[i].teacher] += count
@@ -91,6 +96,14 @@ def generate(school):
         for value in {getattr(l, kind) for l in school.lessons} - {''}:
             indices = [i for i, l in enumerate(school.lessons) if getattr(l, kind) == value]
             for s in slots: model.add(sum(x[i, s] for i in indices) <= 1)
+    # Class occupancy is a daily prefix: 1,1,...,1,0,...,0.
+    # This prohibits both late starts and internal holes; teachers may still arrive later.
+    for classroom in {lesson.classroom for lesson in school.lessons}:
+        indices = [i for i, lesson in enumerate(school.lessons) if lesson.classroom == classroom]
+        for day in range(school.days):
+            for period in range(school.periods - 1):
+                slot = day * school.periods + period
+                model.add(sum(x[i, slot] for i in indices) >= sum(x[i, slot + 1] for i in indices))
     for teacher in school.teachers:
         if teacher.max_hours is not None:
             indices = [i for i, lesson in enumerate(school.lessons) if lesson.teacher == teacher.name]
@@ -109,7 +122,7 @@ def generate(school):
     solver.parameters.num_search_workers = 2
     status = solver.solve(model)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        return {'status': 'infeasible' if status == cp_model.INFEASIBLE else 'unknown', 'entries': [], 'issues': ['Kufizimet janë të papajtueshme.' if status == cp_model.INFEASIBLE else 'Koha përfundoi pa gjetur zgjidhje; pamundësia nuk është provuar.']}
+        return {'status': 'infeasible' if status == cp_model.INFEASIBLE else 'unknown', 'entries': [], 'issues': ['Kufizimet janë të papajtueshme. Çdo klasë duhet ta nisë nga ora e parë, pa orë të zbrazëta; kontrollo edhe disponueshmërinë e profesorëve për orët e para.' if status == cp_model.INFEASIBLE else 'Koha përfundoi pa gjetur zgjidhje; pamundësia nuk është provuar.']}
     entries = [{'lesson': i, 'slot': s} for i in range(len(school.lessons)) for s in slots if solver.value(x[i,s])]
     errors = verify(school, entries)
     if errors: raise RuntimeError('Independent verification failed: '+str(errors))
