@@ -10,7 +10,7 @@ const TITLES = {
 };
 let state = {days: 5, periods: 6, teachers: [], classes: [], subjects: [], lessons: []};
 let result = null, snapshot = null, mode = 'classroom', editingTeacher = -1, editingLesson = -1;
-let draftBlocks = new Set(), revision = 0, busy = false, confirmation = null;
+let editingClassRule='', draftBlocks = new Set(), revision = 0, busy = false, confirmation = null;
 const el = (tag, text, cls) => { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (cls) node.className = cls; return node; };
 const action = (label, handler, cls = 'secondary') => {const node = el('button', label, cls); node.type = 'button'; node.onclick = handler; return node;};
 function tell(message, error = false) { $('notice').hidden = false; $('notice').textContent = message; $('notice').className = error ? 'error' : ''; }
@@ -48,6 +48,7 @@ function refresh() {
   $('source-note').hidden=!state.sourceNote;$('source-note').textContent=state.sourceNote||'';
   $('nav-teachers').textContent = state.teachers.length; $('nav-lessons').textContent = state.lessons.length;
   $('days').value = state.days; $('periods').value = state.periods;
+  $('min-daily').value=state.minDaily??0;$('max-daily').value=state.maxDaily??'';$('max-subject').value=state.maxSubject??'';
   $('week-capacity').textContent = `${state.days * state.periods} termine në javë për çdo klasë.`;
   const total = state.lessons.reduce((n, l) => n + l.hours, 0);
   $('stats').replaceChildren();
@@ -138,11 +139,11 @@ function renderCatalog(kind){
   const isClass=kind==='class',values=isClass?state.classes:state.subjects,root=$(kind+'-list');root.replaceChildren();
   values.forEach((name,i)=>{
     const row=el('div',undefined,'catalog-item'),text=el('div');const hours=state.lessons.filter(l=>l[isClass?'classroom':'subject']===name).reduce((s,l)=>s+l.hours,0);text.append(el('strong',name),el('small',`${hours} orë të planifikuara / javë`));
-    const controls=el('div');controls.append(action('Ndrysho',()=>{
+    const controls=el('div');if(isClass){const rule=(state.classRules||[]).find(r=>r.classroom===name);text.append(el('small',`Ditore: ${rule?.min_daily_hours??state.minDaily??0}–${rule?.max_daily_hours??state.maxDaily??state.periods} orë`));controls.append(action('Rregullat',()=>openClassRule(name)));}controls.append(action('Ndrysho',()=>{
       const input=$(kind+'-name');input.value=name;input.dataset.edit=i;$(kind+'-form').querySelector('button').textContent='Ruaj';input.focus();
     }),action('Fshi',()=>{
       if(hours){tell('Ky element përdoret në ngarkesën mësimore. Ndrysho ose fshiji angazhimet përkatëse së pari.',true);return;}
-      ask('Të fshihet ky element?',name,()=>{values.splice(i,1);resetCatalogForm(kind);changed('Elementi u fshi.');});
+      ask('Të fshihet ky element?',name,()=>{values.splice(i,1);if(isClass)state.classRules=(state.classRules||[]).filter(r=>r.classroom!==name);resetCatalogForm(kind);changed('Elementi u fshi.');});
     },'delete-button'));row.append(text,controls);root.append(row);
   });
   if(!values.length)root.append(el('div',isClass?'Ende nuk ke shtuar klasa.':'Ende nuk ke shtuar lëndë.','empty'));
@@ -152,23 +153,38 @@ for(const kind of ['class','subject'])$(kind+'-form').onsubmit=e=>{
   e.preventDefault();const input=$(kind+'-name'),name=input.value.trim(),values=kind==='class'?state.classes:state.subjects,index=input.dataset.edit===undefined?-1:Number(input.dataset.edit);
   if(!name)return;
   if(values.some((n,i)=>i!==index&&n.toLocaleLowerCase()===name.toLocaleLowerCase())){tell('Ky emër ekziston tashmë.',true);return;}
-  if(index<0)values.push(name);else{const old=values[index];values[index]=name;state.lessons.forEach(l=>{const field=kind==='class'?'classroom':'subject';if(l[field]===old)l[field]=name;});}
+  if(index<0)values.push(name);else{const old=values[index];values[index]=name;if(kind==='class')(state.classRules||[]).forEach(r=>{if(r.classroom===old)r.classroom=name;});state.lessons.forEach(l=>{const field=kind==='class'?'classroom':'subject';if(l[field]===old)l[field]=name;});}
   resetCatalogForm(kind);changed(kind==='class'?'Klasa u ruajt.':'Lënda u ruajt.');input.focus();
+};
+function openClassRule(name){
+  editingClassRule=name;const rule=(state.classRules||[]).find(r=>r.classroom===name);
+  $('class-rule-title').textContent='Rregullat · '+name;$('class-rule-error').textContent='';
+  $('class-min-daily').value=rule?.min_daily_hours??'';$('class-max-daily').value=rule?.max_daily_hours??'';
+  $('class-rule-dialog').showModal();
+}
+$('cancel-class-rule').onclick=()=>$('class-rule-dialog').close();
+$('class-rule-form').onsubmit=e=>{
+  e.preventDefault();const low=$('class-min-daily').value===''?null:Number($('class-min-daily').value),high=$('class-max-daily').value===''?null:Number($('class-max-daily').value);
+  if((low??state.minDaily??0)>(high??state.maxDaily??state.periods)||(high??state.maxDaily??state.periods)>state.periods){$('class-rule-error').textContent='Kufij të pavlefshëm: minimumi duhet të jetë jo më i madh se maksimumi, brenda orëve të ditës.';return;}
+  state.classRules=(state.classRules||[]).filter(r=>r.classroom!==editingClassRule);
+  if(low!==null||high!==null)state.classRules.push({classroom:editingClassRule,min_daily_hours:low,max_daily_hours:high});
+  $('class-rule-dialog').close();changed('Rregullat e klasës u ruajtën.');
 };
 function resetLesson(){editingLesson=-1;$('lesson-form').reset();$('lesson-hours').value=4;$('save-lesson').textContent='+ Shto angazhimin';$('cancel-lesson').hidden=true;}
 $('cancel-lesson').onclick=resetLesson;
 $('lesson-form').onsubmit=e=>{
   e.preventDefault();
-  const lesson={classroom:$('lesson-class').value,subject:$('lesson-subject').value,teacher:$('lesson-teacher').value,hours:Number($('lesson-hours').value),room:$('lesson-room').value.trim()};
+  const lesson={classroom:$('lesson-class').value,subject:$('lesson-subject').value,teacher:$('lesson-teacher').value,hours:Number($('lesson-hours').value),room:$('lesson-room').value.trim(),max_per_day:$('lesson-max-day').value===''?null:Number($('lesson-max-day').value),double_periods:Number($('lesson-doubles').value||0)};
   if(!state.classes.includes(lesson.classroom)||!state.subjects.includes(lesson.subject)||!state.teachers.some(t=>t.name===lesson.teacher)||!Number.isInteger(lesson.hours)||lesson.hours<1||lesson.hours>40){tell('Zgjidh klasën, lëndën, profesorin dhe numrin e orëve nga 1 deri në 40.',true);return;}
+  if(lesson.double_periods*2>lesson.hours){tell('Blloqet dyshe kërkojnë më shumë orë se ngarkesa javore.',true);return;}
   if(state.lessons.some((l,i)=>i!==editingLesson&&l.classroom===lesson.classroom&&l.subject===lesson.subject&&l.teacher===lesson.teacher&&l.room===lesson.room)){tell('Ky angazhim ekziston tashmë. Përdor “Ndrysho” për t’ia përditësuar orët.',true);return;}
   if(editingLesson<0)state.lessons.push(lesson);else state.lessons[editingLesson]=lesson;
   resetLesson();changed('Ngarkesa mësimore u ruajt.');
 };
 function renderLessons(){
   const root=$('lesson-list'),filter=$('lesson-filter').value;root.replaceChildren();$('lesson-count').textContent=state.lessons.length;
-  state.lessons.forEach((l,i)=>{if(filter&&l.classroom!==filter)return;const row=el('tr');[l.classroom,l.subject,l.teacher,l.hours,l.room||'—'].forEach(text=>row.append(el('td',text)));const cell=el('td');cell.append(action('Ndrysho',()=>{
-    editingLesson=i;$('lesson-class').value=l.classroom;$('lesson-subject').value=l.subject;$('lesson-teacher').value=l.teacher;$('lesson-hours').value=l.hours;$('lesson-room').value=l.room;$('save-lesson').textContent='Ruaj ndryshimin';$('cancel-lesson').hidden=false;$('lesson-class').focus();
+  state.lessons.forEach((l,i)=>{if(filter&&l.classroom!==filter)return;const row=el('tr');[l.classroom,l.subject,l.teacher,`${l.hours}${l.double_periods?' · '+l.double_periods+' dyshe':''}${l.max_per_day?' · max '+l.max_per_day+'/ditë':''}`,l.room||'—'].forEach(text=>row.append(el('td',text)));const cell=el('td');cell.append(action('Ndrysho',()=>{
+    editingLesson=i;$('lesson-class').value=l.classroom;$('lesson-subject').value=l.subject;$('lesson-teacher').value=l.teacher;$('lesson-hours').value=l.hours;$('lesson-room').value=l.room;$('lesson-max-day').value=l.max_per_day??'';$('lesson-doubles').value=l.double_periods??0;$('save-lesson').textContent='Ruaj ndryshimin';$('cancel-lesson').hidden=false;$('lesson-class').focus();
   }),action('Fshi',()=>ask('Të fshihet angazhimi?',`${l.classroom} · ${l.subject} · ${l.hours} orë`,()=>{state.lessons.splice(i,1);resetLesson();changed('Angazhimi u fshi.');}),'delete-button'));row.append(cell);root.append(row);});
   $('lesson-empty').hidden=!!root.children.length;$('lesson-empty').textContent=state.lessons.length?'Nuk ka angazhime për këtë klasë.':'Ende nuk ke angazhime. Plotëso formularin më sipër për ta shtuar të parin.';
   $('load-summary').replaceChildren();state.classes.forEach(name=>{const hours=state.lessons.filter(l=>l.classroom===name).reduce((s,l)=>s+l.hours,0),capacity=state.days*state.periods;const chip=el('span',`${name}: ${hours} / ${capacity} orë`,'load-chip'+(hours>capacity?' over':''));$('load-summary').append(chip);});
@@ -177,11 +193,14 @@ $('lesson-filter').onchange=renderLessons;
 $('week-form').onsubmit=e=>{
   e.preventDefault();const days=Number($('days').value),periods=Number($('periods').value);
   if(!Number.isInteger(days)||days<1||days>7||!Number.isInteger(periods)||periods<1||periods>12)return;
+  const minDaily=Number($('min-daily').value),maxDaily=$('max-daily').value===''?null:Number($('max-daily').value),maxSubject=$('max-subject').value===''?null:Number($('max-subject').value);
+  if(minDaily>(maxDaily??periods)||(maxDaily??periods)>periods){tell('Kufijtë ditorë duhet të jenë brenda orëve të ditës, me minimumin jo më të madh se maksimumi.',true);return;}
+  for(const rule of state.classRules||[]){const low=rule.min_daily_hours??minDaily,high=rule.max_daily_hours??maxDaily??periods;if(low>high||high>periods){tell(`Rregullat e klasës ${rule.classroom} nuk përputhen me javën e re. Ndryshoji te Klasat.`,true);return;}}
   const discarded=state.teachers.reduce((n,t)=>n+t.blocked.filter(k=>{const[d,p]=k.split(':').map(Number);return d>=days||p>=periods;}).length,0);
-  const apply=()=>{state.days=days;state.periods=periods;state.teachers.forEach(t=>t.blocked=t.blocked.filter(k=>{const[d,p]=k.split(':').map(Number);return d<days&&p<periods;}));changed('Java shkollore u përditësua. Gjenero përsëri orarin me këto termine.');};
+  const apply=()=>{state.days=days;state.periods=periods;state.minDaily=minDaily;state.maxDaily=maxDaily;state.maxSubject=maxSubject;state.teachers.forEach(t=>t.blocked=t.blocked.filter(k=>{const[d,p]=k.split(':').map(Number);return d<days&&p<periods;}));changed('Java shkollore u përditësua. Gjenero përsëri orarin me këto termine.');};
   if(discarded)ask('Të ndryshohet java?',`${discarded} bllokime të disponueshmërisë bien jashtë javës së re dhe do të hiqen.`,apply);else apply();
 };
-function payload(){return {schoolName:state.schoolName||'',scheduleTitle:state.scheduleTitle||'',days:state.days,periods:state.periods,teachers:state.teachers.map(t=>({name:t.name,max_hours:t.maxHours??null,unavailable:t.blocked.map(k=>{const[d,p]=k.split(':').map(Number);return d*state.periods+p;})})),lessons:structuredClone(state.lessons),time_limit:10};}
+function payload(){return {schoolName:state.schoolName||'',scheduleTitle:state.scheduleTitle||'',min_daily_hours:state.minDaily??0,max_daily_hours:state.maxDaily??null,max_subject_per_day:state.maxSubject??null,classes:[...state.classes],class_rules:state.classRules||[],days:state.days,periods:state.periods,teachers:state.teachers.map(t=>({name:t.name,max_hours:t.maxHours??null,unavailable:t.blocked.map(k=>{const[d,p]=k.split(':').map(Number);return d*state.periods+p;})})),lessons:structuredClone(state.lessons),time_limit:10};}
 function solveStatus(message,kind=''){const box=el('div',message,'status-box'+(kind?' '+kind:''));$('solve-status').replaceChildren(box);}
 $('generate').onclick=async()=>{
   if(busy||!state.lessons.length)return;busy=true;const requestRevision=revision,request=payload(),requestClasses=[...state.classes];

@@ -48,3 +48,14 @@ Butonat **Excel**, **Word** dhe **PDF** shkarkojnë skedarë të vërtetë `.xls
 ## Fillimi në orën e parë dhe pa orë të zbrazëta
 
 Çdo klasë që ka mësim në një ditë nis detyrimisht në orën e parë dhe vazhdon pa boshllëqe deri në orën e fundit të planifikuar. Orët pas përfundimit të mësimit mbeten të lira; një ditë mund të mbetet pa mësim nëse ngarkesa nuk kërkon ndryshe. Ky është kusht strikt i solver-it, verifikuesit dhe eksporteve. Një profesor mund të fillojë nga ora e tretë, por dy orët e para të klasës duhet të mbulohen nga profesorë të tjerë. Nuk ndryshohen pushimet e zakonshme mes orëve: ndalohen vetëm terminet mësimore të zbrazëta.
+
+
+## Kufijtë ditorë, lëndët dhe orët dyshe
+
+- **Përmbledhja → Java shkollore:** minimumi/maksimumi i orëve për klasat në çdo ditë dhe kufiri ditor i një lënde. Fushat bosh përdorin ditën e plotë / pa kufi shtesë. Minimumi 0 lejon ditë pa mësim.
+- **Klasat & lëndët → Rregullat** pranë klasës: kufij ditorë të veçantë. Bosh trashëgon kufirin e shkollës; 0 lejon ditë të lira për atë klasë.
+- **Ngarkesa mësimore:** maksimumi ditor i lëndës për klasën dhe numri i blloqeve dyshe të kërkuara. Për 4 orë/javë, 2 blloqe kërkojnë dy çifte të ndara pa mbivendosje; kufiri 2/ditë i shpërndan në ditë të ndryshme. Mund të ketë edhe 3 orë me 1 bllok + 1 orë të vetme.
+
+Kufiri i lëndës numërohet bashkë për të gjithë profesorët e saj në të njëjtën klasë. Kufiri specifik zëvendëson atë të shkollës; kur ka disa kufij specifikë për të njëjtën klasë/lëndë, merret më i ulëti. Për orë dyshe duhet të lejohet së paku 2 orë lënde/ditë. Blloqet nuk kalojnë nga një ditë në tjetrën. Mungesa e të dhënave të lëndëve në foto nuk trajtohet si një lëndë reale e përbashkët për kufirin global.
+
+Kontrolli i formularëve të këtyre rregullave: `python tests/browser_rules.py` (me serverin të nisur dhe Playwright/Chromium si te kontrolli i ndërfaqes).

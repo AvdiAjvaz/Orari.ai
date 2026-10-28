@@ -12,7 +12,7 @@ A separate verifier checks the returned entries against the input before any sol
 The browser retains input in localStorage; the server has no database or accounts. Input changes invalidate visible output. CSV exports use the exact solved input snapshot.
 
 ## Scope and next milestones
-This version supports one school/week, shared rooms, availability and class views. It does not yet support double periods, shifts, split groups, fixed placements, teacher-gap optimization, configurable priority tiers, manual dragging, or minimum-change rescheduling. Those require explicit schema, constraints and verifier updates together.
+This version supports one school/week, shared rooms, availability, class/teacher/room/whole-school views, configurable daily loads, hard subject caps, and required double periods. It does not yet support shifts, split groups, fixed placements, teacher-gap optimization, configurable priority tiers, manual dragging, or minimum-change rescheduling. Those require explicit schema, constraints and verifier updates together.
 
 Next: persist versioned school plans in PostgreSQL; add typed rule definitions and lexicographic priorities; add fixed assignments and contradiction explanations; move solve jobs to a bounded background queue with polling/cancellation; add accounts and authorization before public multi-user deployment. Current synchronous requests should run only in trusted local development. Limits bound individual models, not aggregate concurrent demand.
 
@@ -25,4 +25,15 @@ Teacher availability presets in the UI are expanded to explicit unavailable slot
 `POST /api/export/{xlsx|docx|pdf}` accepts the solved School snapshot and entries, validates references and runs the verifier before document generation. Shared projection logic supports the selected individual or whole-school view. Openpyxl, python-docx and ReportLab produce native files; PDF uses bundled DejaVu fonts with their license, avoiding runtime network downloads and preserving Albanian characters. Spreadsheet cells are explicitly strings to prevent formula evaluation. PDF splits large class lists into groups of eight columns. Files are generated in memory, with no retained server documents.
 
 
-Class-day occupancy is a mandatory prefix from period zero: occupancy[p] >= occupancy[p+1]. Each occupied class day therefore begins in the first period and contains no internal gaps. Free trailing periods and entirely empty days are permitted; there is no implicit minimum daily load. The independent verifier checks the same invariant from actual entries, including document-export requests. Teacher availability may begin later, provided other assignments cover the class prefix.
+Class-day occupancy is a mandatory prefix from period zero: occupancy[p] >= occupancy[p+1]. Each occupied class day therefore begins in the first period and contains no internal gaps. Free trailing periods are permitted. The default minimum daily load is zero, so entirely empty days remain permitted unless a positive minimum is configured. The independent verifier checks the same invariant from actual entries, including document-export requests. Teacher availability may begin later, provided other assignments cover the class prefix.
+
+
+## Configurable daily limits and double periods
+
+School defaults `min_daily_hours` (0), `max_daily_hours` (null = periods/day), and `max_subject_per_day` (null = no hard subject cap) preserve older saved plans. `class_rules` overrides minimum/maximum by class; null inherits the school value, while explicit zero overrides a positive minimum. Bounds apply on every selected school day, including registered classes with no assignments. Positive minimums therefore require enough weekly demand to cover all days. The class occupancy prefix rule remains mandatory.
+
+A lesson's `max_per_day` overrides the school subject cap for its class/subject pair. Counts aggregate across all teachers and teaching assignments for that pair. Multiple explicit limits resolve to their minimum. Unknown photo subjects are excluded from the school-wide subject cap because their identity is unavailable; explicit limits still apply.
+
+`double_periods` requires at least that many disjoint adjacent pairs within the same teaching assignment, teacher, class and room, in a single day. Each pair consumes two of the existing weekly hours; odd weekly demand is supported. Pair-start Booleans require both adjacent occupancy variables and cannot overlap. The independent verifier counts disjoint pairs in same-day contiguous runs; boundary-adjacent periods on different days never form a pair. Incidental additional adjacent singles are permitted. Subject caps are never silently raised for doubles: conflicting rules return infeasible with a useful precheck explanation.
+
+Capacity prechecks report incompatible weekly/daily bounds and subject caps. CP-SAT enforces all configured limits alongside existing resource constraints. The verifier and exports validate them independently. The existing soft preference for subject distribution remains subordinate to these hard rules.
