@@ -1,0 +1,113 @@
+from collections import Counter
+from pathlib import Path
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field, model_validator
+from ortools.sat.python import cp_model
+
+class Teacher(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    unavailable: list[int] = Field(default_factory=list)
+
+class Lesson(BaseModel):
+    classroom: str = Field(min_length=1, max_length=80)
+    subject: str = Field(min_length=1, max_length=80)
+    teacher: str
+    hours: int = Field(ge=1, le=40)
+    room: str = ''
+
+class School(BaseModel):
+    days: int = Field(default=5, ge=1, le=7)
+    periods: int = Field(default=6, ge=1, le=12)
+    teachers: list[Teacher] = Field(min_length=1, max_length=100)
+    lessons: list[Lesson] = Field(min_length=1, max_length=250)
+    time_limit: float = Field(default=10, ge=1, le=30)
+
+    @model_validator(mode='after')
+    def references(self):
+        names = [t.name for t in self.teachers]
+        if len(set(names)) != len(names):
+            raise ValueError('Emrat e profesorëve duhet të jenë unikë.')
+        if any(l.teacher not in names for l in self.lessons):
+            raise ValueError('Çdo angazhim duhet të ketë profesor të regjistruar.')
+        if any(s < 0 or s >= self.days*self.periods for t in self.teachers for s in t.unavailable):
+            raise ValueError('Termini i padisponueshëm është jashtë javës.')
+        if sum(l.hours for l in self.lessons) > 1200:
+            raise ValueError('Versioni fillestar përkrah deri në 1200 orë.')
+        return self
+
+def verify(school, entries):
+    errors, occupied = [], set()
+    counts = Counter()
+    unavailable = {t.name: set(t.unavailable) for t in school.teachers}
+    for entry in entries:
+        i, slot = entry['lesson'], entry['slot']
+        if not 0 <= i < len(school.lessons) or not 0 <= slot < school.days*school.periods:
+            errors.append('Termin ose angazhim i pavlefshëm.'); continue
+        lesson = school.lessons[i]
+        counts[i] += 1
+        if slot in unavailable[lesson.teacher]:
+            errors.append('Profesori është i padisponueshëm.')
+        for kind, value in [('class', lesson.classroom), ('teacher', lesson.teacher), ('room', lesson.room)]:
+            if not value: continue
+            key = (kind, value, slot)
+            if key in occupied: errors.append(f'Përplasje: {value}.')
+            occupied.add(key)
+    if any(counts[i] != lesson.hours for i, lesson in enumerate(school.lessons)):
+        errors.append('Numri i orëve javore nuk përputhet.')
+    return errors
+
+def generate(school):
+    slots = range(school.days * school.periods)
+    issues = []
+    for kind in ('classroom', 'teacher', 'room'):
+        demand = Counter()
+        for lesson in school.lessons:
+            if getattr(lesson, kind): demand[getattr(lesson, kind)] += lesson.hours
+        for name, hours in demand.items():
+            capacity = len(slots)
+            if kind == 'teacher':
+                capacity -= len(set(next(t.unavailable for t in school.teachers if t.name == name)))
+            if hours > capacity: issues.append(f'{name}: {hours} orë të kërkuara, vetëm {capacity} termine të lira.')
+    if issues: return {'status': 'infeasible', 'issues': issues, 'entries': []}
+    model = cp_model.CpModel()
+    x = {(i, s): model.new_bool_var(f'x_{i}_{s}') for i in range(len(school.lessons)) for s in slots}
+    unavailable = {t.name: set(t.unavailable) for t in school.teachers}
+    for i, lesson in enumerate(school.lessons):
+        model.add(sum(x[i, s] for s in slots) == lesson.hours)
+        for s in unavailable[lesson.teacher]: model.add(x[i, s] == 0)
+    for kind in ('classroom', 'teacher', 'room'):
+        for value in {getattr(l, kind) for l in school.lessons} - {''}:
+            indices = [i for i, l in enumerate(school.lessons) if getattr(l, kind) == value]
+            for s in slots: model.add(sum(x[i, s] for i in indices) <= 1)
+    penalties = []
+    # Prefer spreading each class/subject across days, even if taught by different teachers.
+    for classroom, subject in {(l.classroom, l.subject) for l in school.lessons}:
+        indices = [i for i,l in enumerate(school.lessons) if (l.classroom,l.subject)==(classroom,subject)]
+        for d in range(school.days):
+            extra = model.new_int_var(0, school.periods, 'repeated_subject')
+            model.add(extra >= sum(x[i,s] for i in indices for s in range(d*school.periods,(d+1)*school.periods))-1)
+            penalties.append(extra)
+    model.minimize(sum(penalties))
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = school.time_limit
+    solver.parameters.num_search_workers = 2
+    status = solver.solve(model)
+    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        return {'status': 'infeasible' if status == cp_model.INFEASIBLE else 'unknown', 'entries': [], 'issues': ['Kufizimet janë të papajtueshme.' if status == cp_model.INFEASIBLE else 'Koha përfundoi pa gjetur zgjidhje; pamundësia nuk është provuar.']}
+    entries = [{'lesson': i, 'slot': s} for i in range(len(school.lessons)) for s in slots if solver.value(x[i,s])]
+    errors = verify(school, entries)
+    if errors: raise RuntimeError('Independent verification failed: '+str(errors))
+    return {'status': 'optimal' if status == cp_model.OPTIMAL else 'feasible', 'entries': entries, 'issues': [], 'penalty': int(solver.objective_value), 'seconds': solver.wall_time, 'verified': True}
+
+app = FastAPI(title='Orari.ai')
+
+@app.post('/api/generate')
+def schedule(school: School):
+    return generate(school)
+
+@app.get('/api/health')
+def health():
+    return {'status': 'ok'}
+
+app.mount('/', StaticFiles(directory=Path(__file__).parent / 'static', html=True), name='web')
