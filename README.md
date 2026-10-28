@@ -59,3 +59,6 @@ Butonat **Excel**, **Word** dhe **PDF** shkarkojnë skedarë të vërtetë `.xls
 Kufiri i lëndës numërohet bashkë për të gjithë profesorët e saj në të njëjtën klasë. Kufiri specifik zëvendëson atë të shkollës; kur ka disa kufij specifikë për të njëjtën klasë/lëndë, merret më i ulëti. Për orë dyshe duhet të lejohet së paku 2 orë lënde/ditë. Blloqet nuk kalojnë nga një ditë në tjetrën. Mungesa e të dhënave të lëndëve në foto nuk trajtohet si një lëndë reale e përbashkët për kufirin global.
 
 Kontrolli i formularëve të këtyre rregullave: `python tests/browser_rules.py` (me serverin të nisur dhe Playwright/Chromium si te kontrolli i ndërfaqes).
+
+
+Te shembulli nga fotoja është aktivizuar preferenca **6 orë të premten për secilën klasë**. Ndryshohet ose hiqet te Përmbledhja → Java shkollore. Motori minimizon fillimisht devijimin nga ky synim dhe pastaj përsëritjet e lëndëve. Rregullat strikte kanë përparësi; nëse rezultati nuk e plotëson synimin, shfaqen orët reale të së premtes për secilën klasë.

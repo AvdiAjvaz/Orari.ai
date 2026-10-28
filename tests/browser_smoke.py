@@ -136,6 +136,7 @@ with sync_playwright() as p:
     page.get_by_role('button',name='Vazhdo',exact=True).click()
     page.get_by_text('Transkriptimi nga fotoja u kontrollua',exact=False).wait_for(timeout=20000)
     assert page.locator('.all-classes-table td strong').count()==199
+    assert page.evaluate('state.preferredFriday')==6
     assert page.locator('.all-classes-table thead th').count()==35
     assert page.locator('.all-classes-table').first.evaluate('(e)=>e.getBoundingClientRect().width') < 1200
     assert page.locator('.all-classes-table').first.locator('thead th').last.evaluate('(e)=>e.getBoundingClientRect().right') <= page.locator('#schedule').evaluate('(e)=>e.getBoundingClientRect().right')+1
@@ -163,6 +164,8 @@ with sync_playwright() as p:
     page.get_by_role('button',name='Gjenero orarin →').click()
     page.get_by_text('✓ Orar i verifikuar',exact=False).wait_for(timeout=30000)
     assert page.locator('.all-classes-table td strong').count()==199
+    assert page.evaluate('result.friday_deviation')==0
+    assert page.evaluate('Object.values(result.friday_loads).every(n=>n===6)')
     assert page.evaluate("result.entries.filter(e=>snapshot.lessons[e.lesson].teacher==='Agnesa').length") == 4
     assert page.evaluate("result.entries.filter(e=>snapshot.lessons[e.lesson].teacher==='Agnesa').every(e=>[1,4].includes(Math.floor(e.slot/7))&&e.slot%7>=2)")
     assert not errors, errors

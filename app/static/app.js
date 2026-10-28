@@ -48,7 +48,7 @@ function refresh() {
   $('source-note').hidden=!state.sourceNote;$('source-note').textContent=state.sourceNote||'';
   $('nav-teachers').textContent = state.teachers.length; $('nav-lessons').textContent = state.lessons.length;
   $('days').value = state.days; $('periods').value = state.periods;
-  $('min-daily').value=state.minDaily??0;$('max-daily').value=state.maxDaily??'';$('max-subject').value=state.maxSubject??'';
+  $('preferred-friday').value=state.preferredFriday??'';$('min-daily').value=state.minDaily??0;$('max-daily').value=state.maxDaily??'';$('max-subject').value=state.maxSubject??'';
   $('week-capacity').textContent = `${state.days * state.periods} termine në javë për çdo klasë.`;
   const total = state.lessons.reduce((n, l) => n + l.hours, 0);
   $('stats').replaceChildren();
@@ -193,14 +193,16 @@ $('lesson-filter').onchange=renderLessons;
 $('week-form').onsubmit=e=>{
   e.preventDefault();const days=Number($('days').value),periods=Number($('periods').value);
   if(!Number.isInteger(days)||days<1||days>7||!Number.isInteger(periods)||periods<1||periods>12)return;
+  const preferredFriday=$('preferred-friday').value===''?null:Number($('preferred-friday').value);
+  if(preferredFriday!==null&&(days<5||preferredFriday>periods)){tell('Preferenca e së premtes kërkon të paktën 5 ditë dhe orë brenda ditës shkollore. Ndryshoje ose lëre bosh.',true);return;}
   const minDaily=Number($('min-daily').value),maxDaily=$('max-daily').value===''?null:Number($('max-daily').value),maxSubject=$('max-subject').value===''?null:Number($('max-subject').value);
   if(minDaily>(maxDaily??periods)||(maxDaily??periods)>periods){tell('Kufijtë ditorë duhet të jenë brenda orëve të ditës, me minimumin jo më të madh se maksimumi.',true);return;}
   for(const rule of state.classRules||[]){const low=rule.min_daily_hours??minDaily,high=rule.max_daily_hours??maxDaily??periods;if(low>high||high>periods){tell(`Rregullat e klasës ${rule.classroom} nuk përputhen me javën e re. Ndryshoji te Klasat.`,true);return;}}
   const discarded=state.teachers.reduce((n,t)=>n+t.blocked.filter(k=>{const[d,p]=k.split(':').map(Number);return d>=days||p>=periods;}).length,0);
-  const apply=()=>{state.days=days;state.periods=periods;state.minDaily=minDaily;state.maxDaily=maxDaily;state.maxSubject=maxSubject;state.teachers.forEach(t=>t.blocked=t.blocked.filter(k=>{const[d,p]=k.split(':').map(Number);return d<days&&p<periods;}));changed('Java shkollore u përditësua. Gjenero përsëri orarin me këto termine.');};
+  const apply=()=>{state.days=days;state.periods=periods;state.preferredFriday=preferredFriday;state.minDaily=minDaily;state.maxDaily=maxDaily;state.maxSubject=maxSubject;state.teachers.forEach(t=>t.blocked=t.blocked.filter(k=>{const[d,p]=k.split(':').map(Number);return d<days&&p<periods;}));changed('Java shkollore u përditësua. Gjenero përsëri orarin me këto termine.');};
   if(discarded)ask('Të ndryshohet java?',`${discarded} bllokime të disponueshmërisë bien jashtë javës së re dhe do të hiqen.`,apply);else apply();
 };
-function payload(){return {schoolName:state.schoolName||'',scheduleTitle:state.scheduleTitle||'',min_daily_hours:state.minDaily??0,max_daily_hours:state.maxDaily??null,max_subject_per_day:state.maxSubject??null,classes:[...state.classes],class_rules:state.classRules||[],days:state.days,periods:state.periods,teachers:state.teachers.map(t=>({name:t.name,max_hours:t.maxHours??null,unavailable:t.blocked.map(k=>{const[d,p]=k.split(':').map(Number);return d*state.periods+p;})})),lessons:structuredClone(state.lessons),time_limit:10};}
+function payload(){return {schoolName:state.schoolName||'',scheduleTitle:state.scheduleTitle||'',preferred_friday_hours:state.preferredFriday??null,min_daily_hours:state.minDaily??0,max_daily_hours:state.maxDaily??null,max_subject_per_day:state.maxSubject??null,classes:[...state.classes],class_rules:state.classRules||[],days:state.days,periods:state.periods,teachers:state.teachers.map(t=>({name:t.name,max_hours:t.maxHours??null,unavailable:t.blocked.map(k=>{const[d,p]=k.split(':').map(Number);return d*state.periods+p;})})),lessons:structuredClone(state.lessons),time_limit:10};}
 function solveStatus(message,kind=''){const box=el('div',message,'status-box'+(kind?' '+kind:''));$('solve-status').replaceChildren(box);}
 $('generate').onclick=async()=>{
   if(busy||!state.lessons.length)return;busy=true;const requestRevision=revision,request=payload(),requestClasses=[...state.classes];
@@ -214,7 +216,7 @@ $('generate').onclick=async()=>{
     const data=await response.json();
     if(revision!==requestRevision){solveStatus('Të dhënat ndryshuan gjatë gjenerimit. Gjenero përsëri me ndryshimet e reja.','error');return;}
     if(!data.verified){solveStatus((data.status==='infeasible'?'Nuk ekziston orar me këto kufizime.':'Nuk u gjet zgjidhje brenda kohës së caktuar.')+'\n'+(data.issues||[]).join('\n'),'error');$('schedule-empty').hidden=false;return;}
-    result=data;snapshot={...request,classes:requestClasses};solveStatus(`✓ Orar i verifikuar · ${data.entries.length} orë mësimi\n${data.status==='optimal'?'Shpërndarja më e mirë u provua.':'U gjet zgjidhje e vlefshme; optimaliteti nuk u provua.'} Përsëritje lënde brenda ditës: ${data.penalty}.`);
+    result=data;snapshot={...request,classes:requestClasses};solveStatus(`✓ Orar i verifikuar · ${data.entries.length} orë mësimi\n${data.status==='optimal'?'U provua rezultati më i mirë për preferencat e caktuara.':'U gjet zgjidhje e vlefshme; optimaliteti nuk u provua.'} Përsëritje lënde brenda ditës: ${data.penalty}.${request.preferred_friday_hours!=null?'\nE premte — synimi '+request.preferred_friday_hours+' orë/klasë: '+Object.entries(data.friday_loads||{}).map(([c,n])=>c+': '+n).join(' · ')+(data.friday_deviation===0?' ✓':' (preferenca nuk u plotësua plotësisht në këtë rezultat)'):''}`);
     $('csv').disabled=false;$('print').disabled=false;setExports(true);updateViews();refresh();
   }catch(error){solveStatus(error.name==='AbortError'?'Kërkesa zgjati shumë. Shërbimi mund të jetë duke u zgjuar; provo përsëri.':error.message,'error');$('schedule-empty').hidden=false;}
   finally{clearTimeout(timeout);busy=false;document.body.classList.remove('busy');$('generate').textContent='Gjenero orarin →';$('generate').disabled=!state.lessons.length;}

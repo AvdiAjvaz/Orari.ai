@@ -36,6 +36,7 @@ class School(BaseModel):
     periods: int = Field(default=6, ge=1, le=12)
     teachers: list[Teacher] = Field(min_length=1, max_length=100)
     lessons: list[Lesson] = Field(min_length=1, max_length=250)
+    preferred_friday_hours: int | None = Field(default=None, ge=0, le=12)
     min_daily_hours: int = Field(default=0, ge=0, le=12)
     max_daily_hours: int | None = Field(default=None, ge=1, le=12)
     max_subject_per_day: int | None = Field(default=None, ge=1, le=12)
@@ -45,6 +46,8 @@ class School(BaseModel):
 
     @model_validator(mode='after')
     def references(self):
+        if self.preferred_friday_hours is not None and (self.days < 5 or self.preferred_friday_hours > self.periods):
+            raise ValueError('Preferenca e së premtes kërkon të paktën 5 ditë dhe orë brenda ditës shkollore.')
         names = [t.name for t in self.teachers]
         if len(set(names)) != len(names):
             raise ValueError('Emrat e profesorëve duhet të jenë unikë.')
@@ -217,7 +220,16 @@ def generate(school):
             extra = model.new_int_var(0, school.periods, 'repeated_subject')
             model.add(extra >= sum(x[i,s] for i in indices for s in range(d*school.periods,(d+1)*school.periods))-1)
             penalties.append(extra)
-    model.minimize(sum(penalties))
+    friday_deviations = []
+    if school.preferred_friday_hours is not None:
+        for classroom in classrooms(school):
+            indices = [i for i, lesson in enumerate(school.lessons) if lesson.classroom == classroom]
+            total = sum(x[i, slot] for i in indices for slot in range(4 * school.periods, 5 * school.periods))
+            deviation = model.new_int_var(0, school.periods, 'friday_deviation')
+            model.add_abs_equality(deviation, total - school.preferred_friday_hours)
+            friday_deviations.append(deviation)
+    # A unit of Friday deviation outweighs every possible subject-distribution penalty.
+    model.minimize((sum(l.hours for l in school.lessons) + 1) * sum(friday_deviations) + sum(penalties))
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = school.time_limit
     solver.parameters.num_search_workers = 2
@@ -227,7 +239,7 @@ def generate(school):
     entries = [{'lesson': i, 'slot': s} for i in range(len(school.lessons)) for s in slots if solver.value(x[i,s])]
     errors = verify(school, entries)
     if errors: raise RuntimeError('Independent verification failed: '+str(errors))
-    return {'status': 'optimal' if status == cp_model.OPTIMAL else 'feasible', 'entries': entries, 'issues': [], 'penalty': int(solver.objective_value), 'seconds': solver.wall_time, 'verified': True}
+    return {'status': 'optimal' if status == cp_model.OPTIMAL else 'feasible', 'entries': entries, 'issues': [], 'penalty': sum(solver.value(p) for p in penalties), 'friday_deviation': sum(solver.value(p) for p in friday_deviations), 'friday_loads': {c: sum(school.lessons[e['lesson']].classroom == c and e['slot'] // school.periods == 4 for e in entries) for c in sorted(classrooms(school))} if school.preferred_friday_hours is not None else {}, 'seconds': solver.wall_time, 'verified': True}
 
 app = FastAPI(title='Orari.ai')
 
