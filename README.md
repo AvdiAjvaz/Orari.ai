@@ -25,6 +25,7 @@ Shih [arkitekturën](docs/ARCHITECTURE.md) për kufijtë, modelin dhe hapat viju
 - Klasa dhe lëndë: lista të veçanta, ndryshim emrash dhe mbrojtje nga fshirja e elementeve që përdoren.
 - Ngarkesa: zgjedhje nga menyja, ndryshim/fshirje dhe përmbledhje e orëve për klasë.
 - Orari: pamje sipas klasës, profesorit ose sallës, printim dhe eksport CSV.
+- “Të gjitha klasat”: tabela sipas ditës, klasat në kolona dhe orët në rreshta; zgjedhje për emrin e profesorit, lëndën ose të dyja. Përfshihen edhe klasat pa ngarkesë. Printimi / ruajtja si PDF ndjek pamjen e zgjedhur.
 - Të dhënat e versionit të parë barten automatikisht; ruhen vetëm në shfletuesin aktual.
 
 Kontrolli i ndërfaqes me shfletues (opsional për zhvillim, kërkon Chromium dhe `pip install playwright`):

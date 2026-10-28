@@ -162,7 +162,7 @@ $('week-form').onsubmit=e=>{
 function payload(){return {days:state.days,periods:state.periods,teachers:state.teachers.map(t=>({name:t.name,unavailable:t.blocked.map(k=>{const[d,p]=k.split(':').map(Number);return d*state.periods+p;})})),lessons:structuredClone(state.lessons),time_limit:10};}
 function solveStatus(message,kind=''){const box=el('div',message,'status-box'+(kind?' '+kind:''));$('solve-status').replaceChildren(box);}
 $('generate').onclick=async()=>{
-  if(busy||!state.lessons.length)return;busy=true;const requestRevision=revision,request=payload();
+  if(busy||!state.lessons.length)return;busy=true;const requestRevision=revision,request=payload(),requestClasses=[...state.classes];
   $('generate').disabled=true;$('generate').textContent='Duke gjeneruar…';document.body.classList.add('busy');
   result=null;snapshot=null;$('schedule').replaceChildren();$('schedule-empty').hidden=true;$('csv').disabled=true;$('print').disabled=true;
   solveStatus('Duke kërkuar një orar pa përplasje…\nPo kontrollohen disponueshmëria dhe shpërndarja e lëndëve.','pending');
@@ -173,17 +173,26 @@ $('generate').onclick=async()=>{
     const data=await response.json();
     if(revision!==requestRevision){solveStatus('Të dhënat ndryshuan gjatë gjenerimit. Gjenero përsëri me ndryshimet e reja.','error');return;}
     if(!data.verified){solveStatus((data.status==='infeasible'?'Nuk ekziston orar me këto kufizime.':'Nuk u gjet zgjidhje brenda kohës së caktuar.')+'\n'+(data.issues||[]).join('\n'),'error');$('schedule-empty').hidden=false;return;}
-    result=data;snapshot=request;solveStatus(`✓ Orar i verifikuar · ${data.entries.length} orë mësimi\n${data.status==='optimal'?'Shpërndarja më e mirë u provua.':'U gjet zgjidhje e vlefshme; optimaliteti nuk u provua.'} Përsëritje lënde brenda ditës: ${data.penalty}.`);
+    result=data;snapshot={...request,classes:requestClasses};solveStatus(`✓ Orar i verifikuar · ${data.entries.length} orë mësimi\n${data.status==='optimal'?'Shpërndarja më e mirë u provua.':'U gjet zgjidhje e vlefshme; optimaliteti nuk u provua.'} Përsëritje lënde brenda ditës: ${data.penalty}.`);
     $('csv').disabled=false;$('print').disabled=false;updateViews();refresh();
   }catch(error){solveStatus(error.name==='AbortError'?'Kërkesa zgjati shumë. Shërbimi mund të jetë duke u zgjuar; provo përsëri.':error.message,'error');$('schedule-empty').hidden=false;}
   finally{clearTimeout(timeout);busy=false;document.body.classList.remove('busy');$('generate').textContent='Gjenero orarin →';$('generate').disabled=!state.lessons.length;}
 };
-function updateViews(){if(!snapshot)return;selectOptions('view-select',[...new Set(snapshot.lessons.map(l=>l[mode]).filter(Boolean))]);renderSchedule();}
-document.querySelectorAll('[data-mode]').forEach(button=>button.onclick=()=>{mode=button.dataset.mode;document.querySelectorAll('[data-mode]').forEach(n=>n.classList.toggle('selected',n===button));updateViews();});
+function updateViews(){
+  const all=mode==='all';
+  $('view-select').hidden=all;
+  $('all-content-control').hidden=!all;
+  if(!snapshot)return;
+  if(!all)selectOptions('view-select',[...new Set(snapshot.lessons.map(l=>l[mode]).filter(Boolean))]);
+  renderSchedule();
+}
+document.querySelectorAll('[data-mode]').forEach(button=>button.onclick=()=>{mode=button.dataset.mode;document.querySelectorAll('[data-mode]').forEach(n=>{n.classList.toggle('selected',n===button);n.setAttribute('aria-pressed',String(n===button));});updateViews();});
 $('view-select').onchange=renderSchedule;
+$('all-content').onchange=renderSchedule;
 function renderSchedule(){
   if(!result||!snapshot)return;
   $('schedule').replaceChildren();$('schedule-empty').hidden=true;
+  if(mode==='all'){renderAllClasses();return;}
   const value=$('view-select').value;if(!value){$('schedule').append(el('div','Nuk ka salla të caktuara në këtë orar.','empty'));return;}
   const table=el('table',undefined,'schedule-table');table.append(el('caption',`Orari javor · ${value}`,'sr-only'));const head=table.createTHead().insertRow();['Ora',...DAYS.slice(0,snapshot.days)].forEach(text=>{const th=el('th',text);th.scope='col';head.append(th);});const body=table.createTBody();
   const subjects=[...new Set(snapshot.lessons.map(l=>l.subject))];
@@ -197,6 +206,37 @@ function renderSchedule(){
     }
   }
   $('schedule').append(table);
+}
+function renderAllClasses(){
+  const root=el('div',undefined,'all-classes-view');
+  root.append(el('h2','Orari javor · Të gjitha klasat','all-classes-title'));
+  const classes=snapshot.classes||[...new Set(snapshot.lessons.map(l=>l.classroom))];
+  const content=$('all-content').value;
+  // Index the verified result once; changing views never regenerates the timetable.
+  const entries=new Map(result.entries.map(e=>[`${e.slot}:${snapshot.lessons[e.lesson].classroom}`,snapshot.lessons[e.lesson]]));
+  for(let day=0;day<snapshot.days;day++){
+    const section=el('section',undefined,'all-day'),heading=el('h3','E '+DAYS[day].toLocaleUpperCase('sq'),'all-day-heading');
+    section.append(heading);
+    const table=el('table',undefined,'all-classes-table');table.style.setProperty('--class-columns',classes.length);
+    table.append(el('caption',`${DAYS[day]} · të gjitha klasat`,'sr-only'));
+    const head=table.createTHead().insertRow();
+    ['Ora',...classes].forEach(name=>{const th=el('th',name);th.scope='col';head.append(th);});
+    const body=table.createTBody();
+    for(let period=0;period<snapshot.periods;period++){
+      const row=body.insertRow(),hour=el('th',period+1);hour.scope='row';row.append(hour);
+      for(const classroom of classes){
+        const cell=row.insertCell(),lesson=entries.get(`${day*snapshot.periods+period}:${classroom}`);
+        if(!lesson){cell.append(el('span','—','all-free'));continue;}
+        const main=content==='subject'?lesson.subject:lesson.teacher;
+        cell.append(el('strong',main));
+        if(content==='both')cell.append(el('small',lesson.subject));
+        cell.title=`${classroom} · ${lesson.subject} · ${lesson.teacher}${lesson.room?' · '+lesson.room:''}`;
+        cell.dataset.classroom=classroom;cell.dataset.slot=day*snapshot.periods+period;
+      }
+    }
+    section.append(table);root.append(section);
+  }
+  $('schedule').append(root);
 }
 function download(name,content,type){const url=URL.createObjectURL(new Blob([content],{type})),link=el('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 $('csv').onclick=()=>{

@@ -43,8 +43,46 @@ with sync_playwright() as p:
     page.get_by_role('button',name='Gjenero orarin →').click()
     page.get_by_text('✓ Orar i verifikuar',exact=False).wait_for(timeout=20000)
     assert page.locator('.lesson-block').count()==11
+    # The full-school view is a projection of the same verified timetable.
+    page.get_by_role('button',name='Të gjitha klasat',exact=True).click()
+    assert page.locator('.all-day').count()==5
+    assert page.locator('.all-classes-table tbody tr').count()==30
+    assert page.locator('.all-classes-table td strong').count()==22
+    assert not page.locator('#view-select').is_visible()
+    expected=page.evaluate("result.entries.map(e=>({slot:String(e.slot),classroom:snapshot.lessons[e.lesson].classroom,text:snapshot.lessons[e.lesson].teacher}))")
+    actual=page.locator('.all-classes-table td[data-slot]').evaluate_all("cells=>cells.map(c=>({slot:c.dataset.slot,classroom:c.dataset.classroom,text:c.querySelector('strong').textContent}))")
+    key=lambda e:(e['slot'],e['classroom'])
+    assert sorted(actual,key=key)==sorted(expected,key=key)
+    page.get_by_label('Përmbajtja e qelizës',exact=True).select_option('both')
+    assert page.locator('.all-classes-table td small').count()==22
+    page.get_by_label('Përmbajtja e qelizës',exact=True).select_option('subject')
+    assert page.locator('.all-classes-table td strong').filter(has_text='Matematikë').count()==8
+    page.get_by_label('Përmbajtja e qelizës',exact=True).select_option('teacher')
+    page.screenshot(path='/tmp/orari-all-classes.png',full_page=True)
+    page.emulate_media(media='print')
+    assert page.locator('.all-day').first.is_visible()
+    assert not page.locator('.sidebar').is_visible()
+    assert page.evaluate("getComputedStyle(document.querySelector('#schedule')).overflowX")=='visible'
+    page.pdf(path='/tmp/orari-all-classes.pdf',format='A4',print_background=True)
+    page.emulate_media(media='screen')
+    page.get_by_role('button',name='Sipas sallës',exact=True).click()
+    assert page.locator('.lesson-block').count()==4
+    page.get_by_role('button',name='Sipas klasës',exact=True).click()
+    assert page.locator('.lesson-block').count()==11
+    # Classes without assigned hours must also appear as empty columns.
+    page.get_by_role('button',name='▤ Klasat & lëndët').click()
+    page.get_by_label('Emri i klasës',exact=True).fill('VII-1')
+    page.get_by_role('button',name='Shto klasë',exact=True).click()
+    page.get_by_role('button',name='▥ Orari javor').click()
+    page.get_by_role('button',name='Gjenero orarin →').click()
+    page.get_by_text('✓ Orar i verifikuar',exact=False).wait_for(timeout=20000)
+    page.get_by_role('button',name='Të gjitha klasat',exact=True).click()
+    assert page.locator('.all-classes-table thead th').count()==20
+    assert page.locator('.all-classes-table td strong').count()==22
+    assert page.locator('.all-classes-table tbody tr td:last-child .all-free').count()==30
     page.screenshot(path='/tmp/orari-desktop.png',full_page=True)
     page.set_viewport_size({'width':390,'height':844})
+    page.get_by_role('button',name='Të gjitha klasat',exact=True).click()
     page.screenshot(path='/tmp/orari-mobile.png',full_page=True)
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), 'Mobile overflow'
     page.get_by_role('button',name='♙ Profesorët').click()
